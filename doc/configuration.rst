@@ -46,3 +46,14 @@ Then, within your new directory ::
 This will copy the appropriate scripts to your directory. You are encouraged to use your favorite text editor and inspect the contents of the ``config.yaml`` file, which will be used frequently by this package.
 
 One of the first things you should notice is the field ``data_file: data.hdf5``.
+
+SB2 parameter checklist
+-----------------------
+
+For ``SB2`` projects, confirm that ``parameters`` in ``config.yaml`` include:
+
+* ``q``, ``K``, ``e``, ``omega``, ``P``, ``T0``, ``gamma``
+* ``amp_f``, ``l_f`` (primary GP hyperparameters)
+* ``amp_g``, ``l_g`` (secondary GP hyperparameters)
+
+You can hold selected parameters fixed using ``fix_params`` and tune proposal scales using ``jumps``.

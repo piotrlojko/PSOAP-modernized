@@ -13,8 +13,8 @@ import math
 # this is the fast expoential function
 from libc.math cimport exp
 
-cdef double c_kms = 2.99792458e5 #km s^-1
-cdef double c_kms2 = (2.99792458e5)**2 #km s^-1
+cdef double c_kms = C.c_kms #km s^-1
+cdef double c_kms2 = C.c_kms**2 #km s^-1
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

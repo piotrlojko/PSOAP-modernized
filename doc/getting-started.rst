@@ -6,24 +6,25 @@ Getting Started
 Installation
 ------------
 
-`PSOAP` requires a few packages standard to the scientific Python ecosystem. It is written and tested for currently maintained Python releases (Python 3.4+ as of Nov 2017); it has not been tested on the Python 2.x series and I do not anticipate it to work on it either.
+`PSOAP` requires a few packages standard to the scientific Python ecosystem. It is written and tested for currently maintained Python releases.
 
-* ``numpy``
-* ``scipy``
-* ``cython``
-* ``astropy``
-* ``h5py``
-* ``matplotlib``
-* ``celerite`` (optional)
+* ``numpy`` (>=1.26)
+* ``scipy`` (>=1.12)
+* ``astropy`` (>=6.0)
+* ``matplotlib`` (>=3.8)
+* ``pyyaml`` (>=6.0)
+* ``cython`` (>=3.0)
+* ``scikit-learn`` (optional, for alternative GP implementations)
 
-All of these packages can be installed via an `Anaconda Python <http://continuum.io/downloads>`_ installation or your normal means of managing your Python packages. Once you have installed them, clone the `PSOAP` package from the `github repository <https://github.com/iancze/PSOAP>`_ ::
+All of these packages can be installed with your normal Python package manager. Once you have installed them, clone the `PSOAP` package from the `github repository <https://github.com/piotrlojko/PSOAP-modernized>`_ ::
 
-    $ git clone https://github.com/iancze/PSOAP.git
-    $ cd PSOAP
+    $ git clone https://github.com/piotrlojko/PSOAP-modernized.git
+    $ cd PSOAP-modernized
 
-and change to the top level ``PSOAP`` directory. Build the package via ::
+and change to the top level ``PSOAP`` directory. Build and install the package via ::
 
-    $ python setup.py install
+    $ pip install -e .
+    $ python setup.py build_ext --inplace
 
 Which should build the cython extensions (used for faster matrix evaluations) and install the system scripts to your shell ``PATH``. To check that you've got everything installed properly, try running from your shell ::
 
@@ -33,14 +34,12 @@ Which should build the cython extensions (used for faster matrix evaluations) an
 
 If this doesn't work, try double-checking the output from your install process to see if any errors popped up. If you are unable to fix these issues via the normal means of debugging python installs, please `raise an issue <https://github.com/iancze/PSOAP/issues>`_ with specifics about your system.
 
-`PSOAP` has preliminary support for using the `celerite package <http://celerite.readthedocs.io/>`_, which implements fast, one dimensional Gaussian processes which are used when fitting a single stationary star, or a single-lined spectroscopic binary or triple. You can optionally install this package following the link above. Unfortunately, this speedup is not available when fitting double or triple-lined spectroscopic binaries, though there may exist approximations which make this possible in the future.
-
 Testing
 -------
 
 If you really want to make sure everything works on your system, you can run the test suite by installing the `pytest <https://docs.pytest.org/en/latest/>`_ package, changing to the directory where you cloned the repository, and then running ::
 
-    $ py.test -v
+    $ pytest
 
 If any of these tests fail, please report them by `raising an issue <https://github.com/iancze/PSOAP/issues>`_ with specifics about your system.
 

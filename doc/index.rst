@@ -23,6 +23,7 @@ Contents:
    scripts
    configuration
    models
+   sb2-tutorial
    tutorial
    orbit
    data
