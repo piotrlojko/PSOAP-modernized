@@ -21,3 +21,25 @@ Specifying orbital models
 Although one would think that we would only need the number of gravitational bodies to specify an orbit (and this is true), we do usually want to know how many spectroscopic bodies there are as well, since there are a different number of orbital parameters that we can constrain based upon how many spectroscopic bodies we see. Therefore `orbit.py` has orbital models for a wide range of models (e.g., `ST1`, `SB2`, etc...).
 
 When this framework grows to include telluric models, or veiling models, these will be denoted with a `+`. For example, a single star with a telluric model would be denoted by `SS1+T`. Unfortunately these additional models are not able to use the fast `celerite` framework.
+
+SB2 model quick reference
+-------------------------
+
+For a double-lined spectroscopic binary, both components contribute measurable flux and radial velocity information.
+
+The key orbital parameters are:
+
+* ``q`` (mass ratio)
+* ``K`` (semi-amplitude)
+* ``e`` (eccentricity)
+* ``omega`` (argument of periastron)
+* ``P`` (orbital period)
+* ``T0`` (epoch of periastron passage)
+* ``gamma`` (systemic velocity)
+
+The key GP parameters are:
+
+* ``amp_f``, ``l_f`` for the primary component spectrum GP
+* ``amp_g``, ``l_g`` for the secondary component spectrum GP
+
+For a complete step-by-step workflow, see :ref:`sb2-tutorial`.

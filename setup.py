@@ -57,15 +57,14 @@ setup(
         "numpy>=1.26",
         "scipy>=1.12",
         "astropy>=6.0",
-        "emcee>=3.1",
         "matplotlib>=3.8",
         "pyyaml>=6.0",
-        "scikit-learn>=1.4",
         "cython>=3.0",
     ],
     extras_require={
         "dev": ["check-manifest"],
         "test": ["pytest", "coverage"],
+        "sklearn": ["scikit-learn>=1.4"],
     },
     package_data={
         "psoap": [

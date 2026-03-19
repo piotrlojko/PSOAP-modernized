@@ -15,6 +15,23 @@ PSOAP is a package for simultaneously inferring stellar (and/or exoplanet) orbit
 Documentation and installation instructi
 ons are available at [http://psoap.readthedocs.io](http://psoap.readthedocs.io).
 
+## Quick start (SB2)
+
+```bash
+# Install in development mode
+pip install -e .
+python setup.py build_ext --inplace
+
+# Initialize a new SB2 project
+psoap-initialize --model SB2
+
+# Edit config.yaml, then run sampling
+psoap-sample
+
+# Plot posterior summaries and RV results
+psoap-plot-samples
+```
+
 ![disentangling loop](output.gif "disentangling loop")
 
 If you use our paper, code, or a derivative of it in your research, we would really appreciate a citation to [Czekala et al. 2017](http://adsabs.harvard.edu/abs/2017ApJ...840...49C):
