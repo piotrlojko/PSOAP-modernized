@@ -1,50 +1,54 @@
+"""
+Initialize a new working directory for PSOAP inference.
+
+Usage::
+
+    psoap-initialize --model SB2
+    psoap-initialize --check
+"""
+
 import sys
-import pkg_resources
+import importlib.resources
 import psoap
 
 
 def main():
-    """
-    Available from command line as ``psoap-initialize``
-
-    """
-
     import argparse
+    import shutil
 
-    parser = argparse.ArgumentParser(description="Initialize a new directory to do inference.")
-    parser.add_argument("--check", action="store_true", help="To help folks check whether the package was installed properly.")
-    parser.add_argument("--model", choices=["SB1", "SB2", "ST3"], help="Which type of model to use, SB1, SB2, ST1, or SB3.")
-
+    parser = argparse.ArgumentParser(
+        description="Initialize a new directory for PSOAP inference.")
+    parser.add_argument(
+        "--check", action="store_true",
+        help="Check whether the package was installed properly.")
+    parser.add_argument(
+        "--model", choices=["SB2", "ST2", "ST3"],
+        help="Which type of model to use: SB2 (double-lined binary), "
+             "ST2 (double-lined tertiary), or ST3 (triple-lined tertiary).")
     args = parser.parse_args()
 
     if args.check:
-
         print("PSOAP successfully installed and linked.")
         print("Using Python Version", sys.version)
         sys.exit()
-
     else:
-        # Initialize the directory based upon the chosen model
-        import shutil
-        import psoap
+        # ST2 and ST3 are hooks — fall back to SB2 config if no dedicated one
+        model = args.model or "SB2"
+        config_name = "config.{}.yaml".format(model)
 
-        # Copy over the appropriate config.yaml file to current working directory
-        masks = pkg_resources.resource_filename("psoap", "data/masks.dat")
-        chunks = pkg_resources.resource_filename("psoap", "data/chunks.dat")
-        config = pkg_resources.resource_filename("psoap", "data/config.{}.yaml".format(args.model))
+        try:
+            ref = importlib.resources.files("psoap").joinpath("data/" + config_name)
+            shutil.copy(str(ref), "config.yaml")
+        except (FileNotFoundError, TypeError):
+            # Fall back for Python < 3.9 or missing resource
+            import pkg_resources
+            config = pkg_resources.resource_filename("psoap", "data/" + config_name)
+            shutil.copy(config, "config.yaml")
 
-        shutil.copy(masks, "masks.dat")
-        shutil.copy(chunks, "chunks.dat")
-        shutil.copy(config, "config.yaml")
+        print("Copied config file for {} model to config.yaml".format(model))
+        print("Edit config.yaml to point to your spectra_list file and "
+              "adjust orbital/GP parameters.")
 
-        # import os
-        # import inspect
-        # basedir = os.path.dirname(inspect.getfile(psoap))
-        # shutil.copy(basedir + "/../data/config.{}.yaml".format(args.model), "config.yaml")
-        # shutil.copy(basedir + "/../data/chunks.dat", "chunks.dat")
-        # shutil.copy(basedir + "/../data/masks.dat", "masks.dat")
-        print("Copied config file for {} model to current working directory as config.yaml".format(args.model))
-        print("Copied chunks.dat and masks.dat to current working directory.")
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()

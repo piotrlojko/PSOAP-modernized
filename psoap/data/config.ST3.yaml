@@ -1,70 +1,63 @@
-# Test config file
-# This is copied to your local directory for each type of MCMC run.
+# PSOAP configuration file for a triple-lined tertiary system (ST3).
+# ST2 (double-lined tertiary) uses the same parameter structure as SB2;
+# use config.SB2.yaml as the starting point for ST2.
 
-data_file : data.hdf5
+# Text file with two columns: "filename" and "date"
+spectra_list: spectra_list.txt
 
-# choice of SB1, SB2, or SB3
+# ST3 model (triple-lined: A+B pair orbited by C)
 model: ST3
 
-# The file that contains the choices of chunks
-chunk_file : chunks.dat
+# wl_min: ~
+# wl_max: ~
 
-# The file that contains the decisions for masking
-mask_file : masks.dat
+epoch_limit: ~
+soften: 1.0
 
-epoch_limit : 20
-soften : 1.0
-# Each model has a subset of parameters that are possible to sample for
-
-# parameters
-# starting position chosen from these parameters
 parameters:
-  q_in: 0.2
-  K_in: 1.0 # semi-amplitude of primary [km/s]
-  e_in: 0.0 # eccentricity
-  omega_in : 0.0 # argument of periastron [deg]
-  P_in : 10.0 # period [days]
-  T0_in : 0.0 # epoch [Julian Date]
-  q_out: 0.2
-  K_out: 1.0 # semi-amplitude of primary [km/s]
-  e_out: 0.0 # eccentricity
-  omega_out : 0.0 # argument of periastron [deg]
-  P_out : 10.0 # period [days]
-  T0_out : 0.0 # epoch [Julian Date]
-  gamma : 0.0 # systemic velocity [km/s]
-  amp_f : 0.5 # amplitude of primary GP [flux]
-  l_f : 5.0 # length scale of primary GP [km/s]
-  amp_g : 0.5 # amplitude of secondary GP [flux]
-  l_g : 5.0 # length scale of secondary GP [km/s]
-  amp_h : 0.5 # amplitude of tertiary GP [flux]
-  l_h : 5.0 # length scale of tertiary GP [km/s]
+  q_in: 0.4       # mass ratio of inner pair q_in = M_B / M_A
+  K_in: 10.0      # semi-amplitude of inner primary [km/s]
+  e_in: 0.0
+  omega_in: 0.0
+  P_in: 3.0
+  T0_in: 0.0
+  q_out: 0.2      # mass ratio of outer companion
+  K_out: 4.0
+  e_out: 0.0
+  omega_out: 0.0
+  P_out: 30.0
+  T0_out: 0.0
+  gamma: 0.0
+  amp_f: 0.5
+  l_f: 5.0
+  amp_g: 0.5
+  l_g: 5.0
+  amp_h: 0.5
+  l_h: 5.0
 
-jumps :
+jumps:
   q_in: 0.01
-  K_in: 0.2 # semi-amplitude of primary [km/s]
-  e_in: 0.02 # eccentricity
-  omega_in : 0.01 # argument of periastron [deg]
-  P_in : 0.01 # period [days]
-  T0_in : 0.01 # epoch [Julian Date]
+  K_in: 0.2
+  e_in: 0.02
+  omega_in: 0.01
+  P_in: 0.01
+  T0_in: 0.01
   q_out: 0.01
-  K_out: 0.2 # semi-amplitude of primary [km/s]
-  e_out: 0.02 # eccentricity
-  omega_out : 0.01 # argument of periastron [deg]
-  P_out : 0.01 # period [days]
-  T0_out : 0.01 # epoch [Julian Date]
-  gamma : 0.01 # systemic velocity [km/s]
-  amp_f : 0.05 # amplitude of primary GP [flux]
-  l_f : 0.5 # length scale of primary GP [km/s]
-  amp_g : 0.05 # amplitude of secondary GP [flux]
-  l_g : 0.5 # length scale of secondary GP [km/s]
-  amp_h : 0.05 # amplitude of tertiary GP [flux]
-  l_h : 0.5 # length scale of tertiary GP [km/s]
-
+  K_out: 0.1
+  e_out: 0.02
+  omega_out: 0.01
+  P_out: 0.1
+  T0_out: 0.1
+  gamma: 0.01
+  amp_f: 0.05
+  l_f: 0.5
+  amp_g: 0.05
+  l_g: 0.5
+  amp_h: 0.05
+  l_h: 0.5
 
 fix_params: ["gamma"]
-
-samples : 100
-
-opt_jump : opt_jump.npy
-
-outdir : output
+samples: 1000
+seed: ~
+opt_jump: opt_jump.npy
+outdir: output

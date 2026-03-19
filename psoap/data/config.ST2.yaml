@@ -1,0 +1,55 @@
+# PSOAP configuration file for a double-lined tertiary system (ST2).
+# ST2: inner SB2 pair (A+B both visible in the spectrum) + invisible outer
+#      companion (C) that dynamically perturbs the inner pair's orbit.
+# The GP model has the same two-component structure as SB2.
+
+spectra_list: spectra_list.txt
+
+# ST2: double-lined tertiary (hook — outer companion C not spectroscopically
+#      visible; only A and B contribute lines to the spectrum).
+model: ST2
+
+epoch_limit: ~
+soften: 1.0
+
+parameters:
+  q_in: 0.2      # mass ratio of inner pair q_in = M_B / M_A
+  K_in: 1.0      # semi-amplitude of inner primary A [km/s]
+  e_in: 0.0
+  omega_in: 0.0
+  P_in: 10.0
+  T0_in: 0.0
+  K_out: 0.5     # semi-amplitude of the inner barycentre in outer orbit [km/s]
+  e_out: 0.0
+  omega_out: 0.0
+  P_out: 100.0
+  T0_out: 0.0
+  gamma: 0.0     # systemic velocity [km/s]
+  amp_f: 0.5
+  l_f: 5.0
+  amp_g: 0.5
+  l_g: 5.0
+
+jumps:
+  q_in: 0.01
+  K_in: 0.2
+  e_in: 0.02
+  omega_in: 0.01
+  P_in: 0.01
+  T0_in: 0.01
+  K_out: 0.05
+  e_out: 0.02
+  omega_out: 0.01
+  P_out: 1.0
+  T0_out: 1.0
+  gamma: 0.01
+  amp_f: 0.05
+  l_f: 0.5
+  amp_g: 0.05
+  l_g: 0.5
+
+fix_params: ["gamma"]
+samples: 1000
+seed: ~
+opt_jump: opt_jump.npy
+outdir: output

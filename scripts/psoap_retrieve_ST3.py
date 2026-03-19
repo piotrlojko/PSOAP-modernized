@@ -1,150 +1,141 @@
 #!/usr/bin/env python
+"""
+Reconstruct disentangled component spectra f, g, h for an ST3 (triple-lined)
+model, and save them as text files and NumPy arrays.
+"""
 
 import argparse
-
-parser = argparse.ArgumentParser(description="Reconstruct the composite spectra for A and B component.")
-args = parser.parse_args()
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-
+import yaml
 from astropy.io import ascii
-from scipy.linalg import cho_factor, cho_solve
 
-from psoap import constants as C
-from psoap.data import redshift, lredshift, Chunk
+from psoap.data import lredshift, redshift, Chunk
 from psoap import covariance
 from psoap import orbit
-from psoap import utils
 
-import multiprocessing as mp
-
-import yaml
+parser = argparse.ArgumentParser(
+    description="Reconstruct ST3 component spectra from the GP mean.")
+parser.add_argument("--draws", type=int, default=0,
+                    help="Number of GP draws to overlay on the mean prediction.")
+args = parser.parse_args()
 
 try:
-    f = open("config.yaml")
-    config = yaml.load(f)
-    f.close()
-except FileNotFoundError as e:
-    print("You need to copy a config.yaml file to this directory, and then edit the values to your particular case.")
+    with open("config.yaml") as f:
+        config = yaml.safe_load(f)
+except FileNotFoundError:
+    print("You need a config.yaml file in this directory.")
     raise
 
-# Load the list of chunks
-chunks = ascii.read(config["chunk_file"])
+pars = config["parameters"]
 
-def process_chunk(row):
-    order, wl0, wl1 = row
-    print("Processing order {}, wl0: {:.1f}, wl1: {:.1f}".format(order, wl0, wl1))
-    chunk = Chunk.open(order, wl0, wl1, limit=config["epoch_limit"])
+spectra_table = ascii.read(config["spectra_list"])
+filenames = list(spectra_table["filename"])
+dates = np.array(spectra_table["date"])
 
-    n_epochs = chunk.n_epochs
-    n_pix = chunk.n_pix
+chunk = Chunk.from_textfiles(
+    filenames, dates,
+    limit=config.get("epoch_limit"),
+    wl_min=config.get("wl_min"),
+    wl_max=config.get("wl_max"),
+)
+n_pix = chunk.n_pix
 
+q_in   = pars["q_in"]
+K_in   = pars["K_in"]
+e_in   = pars["e_in"]
+omega_in = pars["omega_in"]
+P_in   = pars["P_in"]
+T0_in  = pars["T0_in"]
+q_out  = pars["q_out"]
+K_out  = pars["K_out"]
+e_out  = pars["e_out"]
+omega_out = pars["omega_out"]
+P_out  = pars["P_out"]
+T0_out = pars["T0_out"]
+gamma  = pars["gamma"]
+amp_f  = pars["amp_f"]
+l_f    = pars["l_f"]
+amp_g  = pars["amp_g"]
+l_g    = pars["l_g"]
+amp_h  = pars["amp_h"]
+l_h    = pars["l_h"]
 
-    # Use the parameters specified in the yaml file to create the spectra
-    pars = config["parameters"]
+dates_obs = chunk.date1D
+orb = orbit.ST3(q_in, K_in, e_in, omega_in, P_in, T0_in,
+                q_out, K_out, e_out, omega_out, P_out, T0_out,
+                gamma, obs_dates=dates_obs)
+vAs, vBs, vCs = orb.get_velocities()
 
-    q_in = pars["q_in"]
-    K_in = pars["K_in"] # km/s
-    e_in = pars["e_in"] #
-    omega_in = pars["omega_in"] # deg
-    P_in = pars["P_in"] # days
-    T0_in = pars["T0_in"] # epoch
+wls = chunk.wl
+lwls = chunk.lwl
 
-    q_out = pars["q_out"]
-    K_out = pars["K_out"] # km/s
-    e_out = pars["e_out"] #
-    omega_out = pars["omega_out"] # deg
-    P_out = pars["P_out"] # days
-    T0_out = pars["T0_out"] # epoch
+wls_A = redshift(wls, -vAs[:, np.newaxis])
+wls_B = redshift(wls, -vBs[:, np.newaxis])
+wls_C = redshift(wls, -vCs[:, np.newaxis])
+lwls_A = lredshift(lwls, -vAs[:, np.newaxis])
+lwls_B = lredshift(lwls, -vBs[:, np.newaxis])
+lwls_C = lredshift(lwls, -vCs[:, np.newaxis])
 
-    gamma = pars["gamma"] # km/s
-    amp_f = pars["amp_f"] # flux
-    l_f = pars["l_f"] # km/s
-    amp_g = pars["amp_g"] # flux
-    l_g = pars["l_g"] # km/s
-    amp_h = pars["amp_h"] # flux
-    l_h = pars["l_h"] # km/s
+chunk.apply_mask()
+mask = chunk.mask
+lwls_A_flat = lwls_A[mask]
+lwls_B_flat = lwls_B[mask]
+lwls_C_flat = lwls_C[mask]
+fl = chunk.fl
+sigma = chunk.sigma
 
-    dates = chunk.date1D
+n_pix_predict = 2 * n_pix
+lwls_predict = np.linspace(lwls_A_flat.min(), lwls_A_flat.max(), n_pix_predict)
+wls_predict = np.exp(lwls_predict)
 
-    orb = orbit.ST3(q_in, K_in, e_in, omega_in, P_in, T0_in, q_out, K_out, e_out, omega_out, P_out, T0_out, gamma, obs_dates=dates)
+mu, Sigma = covariance.predict_f_g_h(
+    lwls_A_flat, lwls_B_flat, lwls_C_flat,
+    fl, sigma,
+    lwls_predict, lwls_predict, lwls_predict,
+    mu_f=0.0, mu_g=0.0, mu_h=0.0,
+    amp_f=amp_f, l_f=l_f,
+    amp_g=amp_g, l_g=l_g,
+    amp_h=amp_h, l_h=l_h,
+)
 
-    # predict velocities for each epoch
-    vAs, vBs, vCs = orb.get_component_velocities()
+sigma_diag = np.sqrt(np.diag(Sigma))
+mu_f = mu[:n_pix_predict]
+mu_g = mu[n_pix_predict: 2 * n_pix_predict]
+mu_h = mu[2 * n_pix_predict:]
+sigma_f = sigma_diag[:n_pix_predict]
+sigma_g = sigma_diag[n_pix_predict: 2 * n_pix_predict]
+sigma_h = sigma_diag[2 * n_pix_predict:]
 
-    # shift wavelengths according to these velocities to rest-frame of A component
-    wls = chunk.wl
-    lwls = chunk.lwl
-    lwls_A = lredshift(lwls, -vAs[:,np.newaxis])
-    lwls_B = lredshift(lwls, -vBs[:,np.newaxis])
-    lwls_C = lredshift(lwls, -vCs[:,np.newaxis])
+plots_dir = "plots_ST3"
+os.makedirs(plots_dir, exist_ok=True)
 
-    chunk.apply_mask()
-    lwls_A = lwls_A[chunk.mask]
-    lwls_B = lwls_B[chunk.mask]
-    lwls_C = lwls_C[chunk.mask]
+fig, ax = plt.subplots(nrows=3, sharex=True)
+ax[0].plot(wls_predict, mu_f, "b")
+ax[0].set_ylabel(r"$f$")
+ax[1].plot(wls_predict, mu_g, "g")
+ax[1].set_ylabel(r"$g$")
+ax[2].plot(wls_predict, mu_h, "r")
+ax[2].set_ylabel(r"$h$")
+ax[-1].set_xlabel(r"$\lambda\;[\AA]$")
+fig.savefig(os.path.join(plots_dir, "reconstructed.png"), dpi=300)
+plt.close("all")
 
-    # reload this, including the masked data
-    fl = chunk.fl
-    sigma = chunk.sigma
-    dates = chunk.date1D
+np.save(os.path.join(plots_dir, "f.npy"),
+        np.vstack((wls_predict, mu_f, sigma_f)))
+np.save(os.path.join(plots_dir, "g.npy"),
+        np.vstack((wls_predict, mu_g, sigma_g)))
+np.save(os.path.join(plots_dir, "h.npy"),
+        np.vstack((wls_predict, mu_h, sigma_h)))
 
-    # Spectra onto which we want to predict new spectra.
+for label, wl_arr, mu_arr, sig_arr in [
+        ("f", wls_predict, mu_f, sigma_f),
+        ("g", wls_predict, mu_g, sigma_g),
+        ("h", wls_predict, mu_h, sigma_h)]:
+    np.savetxt(os.path.join(plots_dir, "{}.txt".format(label)),
+               np.column_stack([wl_arr, mu_arr + 1.0, sig_arr]),
+               header="wavelength[AA]  flux  sigma",
+               fmt="%.8f  %.8f  %.8f")
 
-    # These are 2X finely spaced as the data, and span the maximum range of the spectra at 0
-    # velocity (barycentric frame).
-    n_pix_predict = 2 * n_pix
-
-    # These are the same input wavelegths.
-    lwls_A_predict = np.linspace(np.min(lwls_A), np.max(lwls_A), num=n_pix_predict)
-    wls_A_predict = np.exp(lwls_A_predict)
-
-    lwls_B_predict = lwls_A_predict
-    wls_B_predict = wls_A_predict
-
-    lwls_C_predict = lwls_A_predict
-    wls_C_predict = wls_A_predict
-
-    mu, Sigma = covariance.predict_f_g_h(lwls_A.flatten(), lwls_B.flatten(), lwls_C.flatten(), fl.flatten(), sigma.flatten(), lwls_A_predict, lwls_B_predict, lwls_C_predict, mu_f=0.0, mu_g=0.0, mu_h=0.0, amp_f=amp_f, l_f=l_f, amp_g=amp_g, l_g=l_g, amp_h=amp_h, l_h=l_h)
-
-    sigma_diag = np.sqrt(np.diag(Sigma))
-
-    mu_f = mu[0:n_pix_predict]
-    sigma_f = sigma_diag[0:n_pix_predict]
-
-    mu_g = mu[n_pix_predict:2 * n_pix_predict]
-    sigma_g = sigma_diag[n_pix_predict: 2 * n_pix_predict]
-
-    mu_h = mu[2 * n_pix_predict:]
-    sigma_h = sigma_diag[2 * n_pix_predict:]
-
-
-    fig, ax = plt.subplots(nrows=3, sharex=True)
-
-    ax[0].plot(wls_A_predict, mu_f, "b")
-    ax[0].set_ylabel(r"$f$")
-    ax[1].plot(wls_B_predict, mu_g, "g")
-    ax[1].set_ylabel(r"$g$")
-
-    ax[2].plot(wls_C_predict, mu_h, "r")
-    ax[2].set_ylabel(r"$h$")
-
-    ax[-1].set_xlabel(r"$\lambda\,[\AA]$")
-
-    plots_dir = "plots_" + C.chunk_fmt.format(order, wl0, wl1)
-
-    fig.savefig(plots_dir + "/reconstructed.png", dpi=300)
-    plt.close("all")
-
-    np.save(plots_dir + "/f.npy", np.vstack((wls_A_predict, mu_f, sigma_f)))
-    np.save(plots_dir + "/g.npy", np.vstack((wls_B_predict, mu_g, sigma_g)))
-    np.save(plots_dir + "/h.npy", np.vstack((wls_C_predict, mu_h, sigma_h)))
-
-    np.save(plots_dir + "/mu.npy", mu)
-    np.save(plots_dir + "/Sigma.npy", Sigma)
-
-
-# A laptop (e.g., mine) doesn't have enough memory to do this in parallel, so only serial for now
-for chunk in chunks:
-    process_chunk(chunk)
+print("Component spectra saved to", plots_dir)
