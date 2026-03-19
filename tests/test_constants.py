@@ -1,5 +1,6 @@
 import astropy.constants as aconst
 import astropy.units as u
+import numpy as np
 
 from psoap import constants as C
 
@@ -13,5 +14,5 @@ def test_constants_are_astropy_backed():
 
 def test_day_and_solar_flux_consistency():
     assert C.day == u.day.to(u.s)
-    expected_f_sun = C.L_sun / (4 * 3.141592653589793 * C.R_sun ** 2)
+    expected_f_sun = C.L_sun / (4 * np.pi * C.R_sun ** 2)
     assert C.F_sun == expected_f_sun
