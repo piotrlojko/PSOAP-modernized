@@ -1,16 +1,24 @@
 #!/usr/bin/env python
+"""
+Predict and plot component spectra for an SB2 model.
+
+Reads ``config.yaml`` from the current directory, loads the spectra, and
+uses the best-fit (or specified) GP/orbit parameters to predict the
+disentangled component spectra ``f`` and ``g`` for each epoch.
+"""
 
 import argparse
 
-parser = argparse.ArgumentParser(description="Measure statistics across multiple chains.")
-parser.add_argument("--draws", type=int, default=0, help="In addition to plotting the mean GP, plot several draws of the GP to show the scatter in predicitions.")
+parser = argparse.ArgumentParser(
+    description="Predict disentangled SB2 component spectra.")
+parser.add_argument("--draws", type=int, default=0,
+                    help="Plot this many GP draws in addition to the mean.")
 args = parser.parse_args()
 
-draws = (args.draws > 0)
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-
+import yaml
 from astropy.io import ascii
 from scipy.linalg import cho_factor, cho_solve
 
@@ -20,128 +28,112 @@ from psoap import covariance
 from psoap import orbit
 from psoap import utils
 
-import yaml
-
 try:
-    f = open("config.yaml")
-    config = yaml.load(f)
-    f.close()
-except FileNotFoundError as e:
-    print("You need to copy a config.yaml file to this directory, and then edit the values to your particular case.")
+    with open("config.yaml") as f:
+        config = yaml.safe_load(f)
+except FileNotFoundError:
+    print("You need a config.yaml file in this directory.")
     raise
 
-# Load the list of chunks
-chunks = ascii.read(config["chunk_file"])
+pars = config["parameters"]
 
+# Load spectra
+spectra_table = ascii.read(config["spectra_list"])
+filenames = list(spectra_table["filename"])
+dates = np.array(spectra_table["date"])
 
-for row in chunks:
-    # For now, only use the first chunk.
-    order, wl0, wl1 = row
-    chunk = Chunk.open(order, wl0, wl1, limit=config["epoch_limit"])
+chunk = Chunk.from_textfiles(
+    filenames, dates,
+    limit=config.get("epoch_limit"),
+    wl_min=config.get("wl_min"),
+    wl_max=config.get("wl_max"),
+)
 
-    # Load the data
-    wls = chunk.wl
-    fl = chunk.fl
-    sigma = chunk.sigma
-    dates = chunk.date1D
+# Data arrays
+wls = chunk.wl
+fl = chunk.fl
+sigma = chunk.sigma
+dates_obs = chunk.date1D
 
-    # Use the parameters specified in the yaml file to create the spectra
-    pars = config["parameters"]
+q      = pars["q"]
+K      = pars["K"]
+e      = pars["e"]
+omega  = pars["omega"]
+P      = pars["P"]
+T0     = pars["T0"]
+gamma  = pars["gamma"]
+amp_f  = pars["amp_f"]
+l_f    = pars["l_f"]
+amp_g  = pars["amp_g"]
+l_g    = pars["l_g"]
 
-    q = pars["q"]
-    K = pars["K"] # km/s
-    e = pars["e"] #
-    omega = pars["omega"] # deg
-    P = pars["P"] # days
-    T0 = pars["T0"] # epoch
-    gamma = pars["gamma"] # km/s
-    amp_f = pars["amp_f"] # flux
-    l_f = pars["l_f"] # km/s
-    amp_g = pars["amp_g"] # flux
-    l_g = pars["l_g"] # km/s
+orb = orbit.SB2(q, K, e, omega, P, T0, gamma, obs_dates=dates_obs)
+vAs, vBs = orb.get_component_velocities()
 
-    orb = orbit.SB2(q, K, e, omega, P, T0, gamma, obs_dates=dates)
+# Doppler-shift wavelengths to rest frame of each component
+wls_A = redshift(wls, -vAs[:, np.newaxis])
+wls_B = redshift(wls, -vBs[:, np.newaxis])
 
-    # predict velocities for each epoch
-    vAs, vBs = orb.get_component_velocities()
+lwls_A = np.log(wls_A)
+lwls_B = np.log(wls_B)
 
-    # shift wavelengths according to these velocities to rest-frame of A component
-    wls_A = redshift(wls, -vAs[:,np.newaxis])
-    wls_B = redshift(wls, -vBs[:,np.newaxis])
+n_epochs, n_pix = wls_A.shape
 
-    n_epochs, n_pix = wls_A.shape
+# Predict component spectra
+mu, Sigma = covariance.predict_f_g(
+    lwls_A.flatten(), lwls_B.flatten(),
+    fl.flatten(), sigma.flatten(),
+    lwls_A.flatten(), lwls_B.flatten(),
+    mu_f=0.0, mu_g=0.0,
+    amp_f=amp_f, l_f=l_f,
+    amp_g=amp_g, l_g=l_g,
+)
 
-    # First predict the component spectra as mean 1 GPs
-    mu, Sigma = covariance.predict_f_g(wls_A.flatten(), wls_B.flatten(), fl.flatten(), sigma.flatten(), wls_A.flatten(), wls_B.flatten(), mu_f=0.0, mu_g=0.0, amp_f=amp_f, l_f=l_f, amp_g=amp_g, l_g=l_g)
+mu_sum, Sigma_sum = covariance.predict_f_g_sum(
+    lwls_A.flatten(), lwls_B.flatten(),
+    fl.flatten(), sigma.flatten(),
+    lwls_A.flatten(), lwls_B.flatten(),
+    mu_fg=1.0,
+    amp_f=amp_f, l_f=l_f,
+    amp_g=amp_g, l_g=l_g,
+)
 
-    # Also predict the sum of the spectra
-    mu_sum, Sigma_sum = covariance.predict_f_g_sum(wls_A.flatten(), wls_B.flatten(), fl.flatten(), sigma.flatten(), wls_A.flatten(), wls_B.flatten(), mu_fg=1.0, amp_f=amp_f, l_f=l_f, amp_g=amp_g, l_g=l_g)
+mu_f = mu[:(n_pix * n_epochs)].reshape(n_epochs, n_pix)
+mu_g = mu[(n_pix * n_epochs):].reshape(n_epochs, n_pix)
+mu_sum = mu_sum.reshape(n_epochs, n_pix)
 
-    mu_f = mu[0:(n_pix * n_epochs)]
-    mu_g = mu[(n_pix * n_epochs):]
+plots_dir = "plots_SB2"
+os.makedirs(plots_dir, exist_ok=True)
 
-    # Reshape outputs
-    mu_f.shape = (n_epochs, -1)
-    mu_g.shape = (n_epochs, -1)
-    mu_sum.shape = (n_epochs, -1)
+for i in range(n_epochs):
+    fig, ax = plt.subplots(nrows=4, sharex=True)
 
+    ax[0].plot(wls[i], fl[i], ".", color="0.4")
+    ax[0].plot(wls[i], mu_sum[i], "b")
+    ax[0].plot(wls[i], mu_f[i] + mu_g[i] + 1.0, "m", ls="-.")
+    ax[0].set_ylabel(r"$f + g$")
 
-    # Make some multivariate draws
-    if draws:
-        n_draws = args.ndraws
-        mu_draw = np.random.multivariate_normal(mu, Sigma, size=n_draws)#, (n_pix * n_epochs)))
+    ax[1].plot(wls[i], mu_f[i], "b")
+    ax[1].set_ylabel(r"$f$")
 
-    for i in range(n_epochs):
-        fig, ax = plt.subplots(nrows=4, sharex=True)
+    ax[2].plot(wls[i], mu_g[i], "g")
+    ax[2].set_ylabel(r"$g$")
 
-        # std_envelope
-        # mu_std = np.std(mu_draw, axis=0)
-        # mu_std_f = mu_std[0:(n_pix * n_epochs)]
-        # mu_std_g = mu_std[(n_pix * n_epochs):]
-        # print(mu_std_f)
-        # print(mu_std_g)
-        # ax[1].fill_between(wls[i], mu_f[i] - mu_std_f[i], mu_f[i] + mu_std_f[i], color="0.8")
-        # ax[2].fill_between(wls[i], mu_g[i] - mu_std_g[i], mu_g[i] + mu_std_g[i], color="0.8")
+    residuals = fl[i] - mu_sum[i]
+    ax[3].plot(wls[i], residuals, ".", color="0.4")
+    ax[3].set_ylabel("residuals")
+    ax[-1].set_xlabel(r"$\lambda\;[\AA]$")
 
-        if draws:
-            for j in range(5):
-                mu_draw_j = mu_draw[j]
+    fig.savefig(os.path.join(plots_dir, "epoch_{:0>2}.png".format(i)), dpi=150)
 
-                mu_draw_f = mu_draw_j[0:(n_pix * n_epochs)]
-                mu_draw_g = mu_draw_j[(n_pix * n_epochs):]
-                mu_draw_f.shape = (n_epochs, -1)
-                mu_draw_g.shape = (n_epochs, -1)
+    # Residual histogram
+    fig, ax = plt.subplots(figsize=(4, 4))
+    ax.hist(residuals / sigma[i], density=True)
+    sig = np.linspace(-4, 4, 50)
+    ax.plot(sig, 1 / np.sqrt(2 * np.pi) * np.exp(-0.5 * sig**2))
+    ax.set_xlabel(r"$(f-\hat{f})/\sigma$")
+    fig.savefig(os.path.join(plots_dir, "epoch_{:0>2}_hist.png".format(i)), dpi=150)
 
-                ax[1].plot(wls[i], mu_draw_f[i], color="0.2", lw=0.5)
-                ax[2].plot(wls[i], mu_draw_g[i], color="0.2", lw=0.5)
+    plt.close("all")
 
-        ax[0].plot(wls[i], fl[i], ".", color="0.4")
-        ax[0].plot(wls[i], mu_sum[i], "b")
-        ax[0].plot(wls[i], mu_f[i] + mu_g[i] + 1.0, "m", ls="-.")
-        ax[0].set_ylabel(r"$f + g$")
-        ax[1].plot(wls[i], mu_f[i], "b")
-        ax[1].set_ylabel(r"$f$")
-        ax[2].plot(wls[i], mu_g[i], "g")
-        ax[2].set_ylabel(r"$g$")
-
-        residuals = fl[i] - mu_sum[i]
-        ax[3].plot(wls[i], residuals, ".", color="0.4")
-        ax[3].set_ylabel("residuals")
-
-        ax[-1].set_xlabel(r"$\lambda$")
-
-        plots_dir = "plots_" + C.chunk_fmt.format(order, wl0, wl1)
-
-        fig.savefig(plots_dir + "/epoch_{:0>2}.png".format(i), dpi=300)
-
-        # make a histogram of the residuals
-        fig, ax = plt.subplots(figsize=(4,4))
-        ax.hist(residuals/sigma[i], normed=True)
-        # Plot an actual Gaussian profile
-        sig = np.linspace(-4, 4, num=50)
-        val = 1/np.sqrt(2 * np.pi) * np.exp(-0.5 * sig**2)
-        ax.plot(sig, val)
-        ax.set_xlabel("sigma")
-        fig.savefig(plots_dir + "/epoch_{:0>2}_hist.png".format(i), dpi=300)
-
-        plt.close("all")
+print("Plots saved to", plots_dir)

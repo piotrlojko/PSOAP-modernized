@@ -1,5 +1,21 @@
+"""
+Single-core MCMC sampler for SB2 (and ST3/ST2 hook) models.
+
+Reads a ``config.yaml`` in the current directory that describes the model
+parameters, data, and sampler settings.
+"""
+
+import argparse
+import yaml
+import os
+import shutil
+import gc
+import logging
+from functools import partial
+
 import numpy as np
-import matplotlib.pyplot as plt
+from astropy.io import ascii
+import emcee
 
 import psoap.constants as C
 from psoap.data import Chunk, lredshift, replicate_wls
@@ -7,246 +23,163 @@ from psoap import utils
 from psoap import orbit
 from psoap import covariance
 
-import yaml
-from functools import partial
 
-from scipy.linalg import cho_factor, cho_solve
-from numpy.linalg import slogdet
-
-from scipy.sparse.linalg import LinearOperator, cg
-from scipy.optimize import minimize
-import celerite
-from celerite import terms
-
-from astropy.io import ascii
-
-import gc
-import logging
-
-import shutil
-
-# Import the Metropolis-hastings sampler
-from emcee import MHSampler
-
-# Do all the global setup
-try:
-    f = open("config.yaml")
-    config = yaml.load(f)
-    f.close()
-except FileNotFoundError as e:
-    print("You need to copy a config.yaml file to this directory, and then edit the values to your particular case.")
-    raise
-
-pars = config["parameters"]
+def _load_config():
+    try:
+        with open("config.yaml") as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        print("You need to copy a config.yaml file to this directory, "
+              "and then edit the values to your particular case.")
+        raise
 
 
-
-# Load the list of chunks
-chunks = ascii.read(config["chunk_file"])
-print("Sampling the first chunk of data.")
-
-order, wl0, wl1 = chunks[0]
-data = Chunk.open(order, wl0, wl1, limit=config["epoch_limit"])
-data.apply_mask()
-
-# The name of the model
-model = config["model"]
-pars = config["parameters"]
-
-
-# Create a partial function which maps a vector of floats to parameters
-convert_vector_p = partial(utils.convert_vector, model=config["model"], fix_params=config["fix_params"], **pars)
-
-lwl = data.lwl
-fl = data.fl - np.median(data.fl)
-sigma = data.sigma * config["soften"]
-dates = data.date
-
-# Note that mask is already applied in loading step. This is to transform velocity shifts
-# Evaluated off of self.date1D
-mask = data.mask
-date1D = data.date1D
-
-# Total number of wavelength points (after applying mask)
-N = data.N
-
-# Initialize the orbit
-orb = orbit.models[model](**pars, obs_dates=date1D)
-
-
-# term = terms.SHOTerm(log_S0=-7.0, log_omega0=10, log_Q=2.)
-term1 = terms.Matern32Term(log_sigma=-4.0, log_rho=-22)# ) #, log_Q=-0.5*np.log(2))
-term2 = terms.Matern32Term(log_sigma=-6.0, log_rho=-22)# ) #, log_Q=-0.5*np.log(2))
-# term += terms.JitterTerm(log_sigma=np.log(np.median(sigma)))
-
-# term = terms.Matern32Term(log_sigma=-1.53, log_rho=-10.7)
-# term += terms.JitterTerm(log_sigma=np.log(np.median(sigma)))
-
-
-gp1 = celerite.GP(term1)
-gp2 = celerite.GP(term2)
-
-# def lnprob(p):
-#     '''
-#     Unified lnprob interface.
-#
-#     Args:
-#         p (np.float): vector containing the model parameters
-#
-#     Returns:
-#         float : the lnlikelihood of the model parameters.
-#     '''
-#
-#     # separate the parameters into orbital and GP based upon the model type
-#     # also backfill any parameters that we have fixed for this analysis
-#     p_orb, p_GP = convert_vector_p(p)
-#
-#     velocities = orbit.models[model](*p_orb, date1D).get_velocities()
-#
-#     # Make sure none are faster than speed of light
-#     if np.any(np.abs(np.array(velocities)) >= C.c_kms):
-#         return -np.inf
-#
-#     # Get shifted wavelengths
-#     lwls = replicate_wls(lwl, velocities, mask)
-#
-#     # Feed velocities and GP parameters to fill out covariance matrix appropriate for this model
-#     lnp = covariance.lnlike[model](V11, *lwls, fl, sigma, *p_GP)
-#     # lnp = covariance.lnlike_f_g_george(*lwls, self.fl, self.sigma, *p_GP)
-#
-#     gc.collect()
-#
-#     return lnp
-
-def lnprob(p):
-    '''
-    Unified lnprob interface.
-
-    Args:
-        p (np.float): vector containing the model parameters
-
-    Returns:
-        float : the lnlikelihood of the model parameters.
-    '''
-
-    # separate the parameters into orbital and GP based upon the model type
-    # also backfill any parameters that we have fixed for this analysis
-    p_orb, p_GP = convert_vector_p(p)
-
-    velocities = orbit.models[model](*p_orb, date1D).get_velocities()
-
-    # Make sure none are faster than speed of light
-    if np.any(np.abs(np.array(velocities)) >= C.c_kms):
-        print("Velocities greater than lightspeed")
+def prior_SB2(p, convert_vector_p):
+    (q, K, e, omega, P, T0, gamma), (amp_f, l_f, amp_g, l_g) = \
+        convert_vector_p(p)
+    if (q <= 0.0 or K <= 0.0 or e < 0.0 or e >= 1.0 or P <= 0.0
+            or omega < -90 or omega > 450
+            or amp_f <= 0.0 or l_f <= 0.0
+            or amp_g <= 0.0 or l_g <= 0.0):
         return -np.inf
+    return 0.0
 
-    # Get shifted wavelengths
-    lwla, lwlb = replicate_wls(lwl, velocities, mask)
 
-    # Sort each vector in wavelength
-    inds1 = np.argsort(lwla)
-    lwla = lwla[inds1]
-
-    inds2 = np.argsort(lwlb)
-    lwlb = lwlb[inds2]
-
-    # Define a custom "LinearOperator"
-    # Given a vector v, compute K dot v
-    def matvec(v):
-        a = gp1.dot(v[inds1], lwla, check_sorted=False)
-        res = np.empty_like(v)
-        res[inds1] = gp1.dot(v[inds1], lwla, check_sorted=False)[:, 0]
-        res[inds2] += gp2.dot(v[inds2], lwlb, check_sorted=False)[:, 0]
-        res[inds2] += v[inds2] * sigma[inds2]**2
-        # res[inds2] += sigma[inds2]**2
-        return res
-    op = LinearOperator((N, N), matvec=matvec)
-
-    # Solve the system and compute the first term of the log likelihood, (K^-1 fl)
-    soln = cg(op, fl, tol=0.01)
-
-    # Then, re-dot the other fl into this
-    lnp = 0.5 * np.dot(fl, soln[0])
-
-    return lnp
-
-def prior_SB1(p):
-    (K, e, omega, P, T0, gamma), (amp_f, l_f) = convert_vector_p(p)
-
-    if K < 0.0 or e < 0.0 or e > 1.0 or P < 0.0 or omega < -90 or omega > 450 or amp_f < 0.0 or l_f < 0.0:
+def prior_ST3(p, convert_vector_p):
+    (q_in, K_in, e_in, omega_in, P_in, T0_in,
+     q_out, K_out, e_out, omega_out, P_out, T0_out, gamma), \
+        (amp_f, l_f, amp_g, l_g, amp_h, l_h) = convert_vector_p(p)
+    if (q_in <= 0.0 or K_in <= 0.0 or e_in < 0.0 or e_in >= 1.0 or P_in <= 0.0
+            or omega_in < -90 or omega_in > 450
+            or q_out <= 0.0 or K_out <= 0.0 or e_out < 0.0 or e_out >= 1.0
+            or P_out <= 0.0 or omega_out < -90 or omega_out > 450
+            or amp_f <= 0.0 or l_f <= 0.0
+            or amp_g <= 0.0 or l_g <= 0.0
+            or amp_h <= 0.0 or l_h <= 0.0):
         return -np.inf
-
-    else:
-        return 0.0
-
-def prior_SB2(p):
-    (q, K, e, omega, P, T0, gamma), (amp_f, l_f, amp_g, l_g) = convert_vector_p(p)
-
-    if q < 0.0 or K < 0.0 or e < 0.0 or e > 1.0 or P < 0.0 or omega < -90 or omega > 450:
-        return -np.inf
-    else:
-        return 0.0
+    return 0.0
 
 
-def prior_ST3(p):
-    (q_in, K_in, e_in, omega_in, P_in, T0_in, q_out, K_out, e_out, omega_out, P_out, T0_out, gamma), (amp_f, l_f, amp_g, l_g, amp_h, l_h) = convert_vector_p(p)
+# Hook: ST2 uses the same prior structure as SB2
+prior_ST2 = prior_SB2
 
-    if q_in < 0.0 or K_in < 0.0 or e_in < 0.0 or e_in > 1.0 or P_in < 0.0 or omega_in < -90 or omega_in > 450 or q_out < 0.0 or K_out < 0.0 or e_out < 0.0 or e_out > 1.0 or P_out < 0.0 or omega_out < -90 or omega_out > 450 or amp_f < 0.0 or l_f < 0.0 or amp_g < 0.0 or l_g < 0.0 or amp_h < 0.0 or l_h < 0.0:
-        return -np.inf
-
-    else:
-        return 0.0
-
-# Optionally load a user-defined prior.
-# Check if a file named "prior.py" exists in the local folder
-# If so, import it
-try:
-    from prior import prior
-    print("Loaded user defined prior.")
-except ImportError:
-    print("Using default prior.")
-    # Set the default priors.
-    priors = {"SB1":prior_SB1, "SB2":prior_SB2, "ST3":prior_ST3}
-    prior = priors[model]
-
-def lnp(p):
-
-    lnprior = prior(p)
-    if lnprior == -np.inf:
-        return -np.inf
-
-    s = lnprob(p)
-
-    # Add any the prior to the total
-    return s + lnprior
+_default_priors = {"SB2": prior_SB2, "ST2": prior_ST2, "ST3": prior_ST3}
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Run single-core MCMC for an SB2/ST3 model.")
+    parser.add_argument("--debug", action="store_true",
+                        help="Print debug commands to log.log")
+    parser.add_argument("--run-index", type=int, default=0,
+                        help="Output subdirectory index.")
+    args = parser.parse_args()
 
-    # Do Argparse stuff
+    config = _load_config()
+    pars = config["parameters"]
+    model = config["model"]
 
-    # Load config files
-    # Determine how many parameters we will actually be fitting
-    # The difference between all of the parameters and the parameters we will be fixing
-    dim = len(utils.registered_params[config["model"]]) - len(config["fix_params"])
+    # ----- output directory -----
+    routdir = config["outdir"] + "/run{:0>2}/".format(args.run_index)
+    if os.path.exists(routdir):
+        print("Deleting", routdir)
+        shutil.rmtree(routdir)
+    print("Creating", routdir)
+    os.makedirs(routdir)
+    shutil.copy("config.yaml", routdir + "config.yaml")
 
-    # Read in starting parameters
-    p0 = utils.convert_dict(config["model"], config["fix_params"], **pars)
+    if args.debug:
+        logging.basicConfig(
+            format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            filename="{}log.log".format(routdir), level=logging.DEBUG,
+            filemode="w", datefmt="%m/%d/%Y %I:%M:%S %p")
+
+    # ----- load data -----
+    filenames = ascii.read(config["spectra_list"])["filename"]
+    dates = ascii.read(config["spectra_list"])["date"]
+    data = Chunk.from_textfiles(
+        list(filenames), dates,
+        limit=config.get("epoch_limit"),
+        wl_min=config.get("wl_min"),
+        wl_max=config.get("wl_max"),
+    )
+    data.apply_mask()
+
+    lwl = data.lwl
+    fl = data.fl
+    sigma = data.sigma * config.get("soften", 1.0)
+    mask = data.mask
+    date1D = data.date1D
+    N = data.N
+    V11 = np.empty((N, N), dtype=np.float64)
+
+    convert_vector_p = partial(
+        utils.convert_vector, model=model,
+        fix_params=config["fix_params"], **pars)
+
+    # ----- prior -----
+    try:
+        from prior import prior as user_prior
+        print("Loaded user-defined prior.")
+        prior_fn = user_prior
+    except ImportError:
+        print("Using default prior.")
+        prior_fn = partial(_default_priors[model], convert_vector_p=convert_vector_p)
+
+    # ----- lnprob -----
+    def lnprob(p):
+        lnprior = prior_fn(p)
+        if not np.isfinite(lnprior):
+            return -np.inf
+
+        p_orb, p_GP = convert_vector_p(p)
+        velocities = orbit.models[model](*p_orb, date1D).get_velocities()
+
+        if np.any(np.abs(np.array(velocities)) >= C.c_kms):
+            return -np.inf
+
+        lwls = replicate_wls(lwl, velocities, mask)
+        lnp = covariance.lnlike[model](V11, *lwls, fl, sigma, *p_GP)
+        gc.collect()
+        return lnp + lnprior
+
+    # ----- sampler -----
+    dim = len(utils.registered_params[model]) - len(config["fix_params"])
+    p0_center = utils.convert_dict(model, config["fix_params"], **pars)
+
+    n_walkers = config.get("n_walkers", max(2 * dim, 32))
+    if n_walkers % 2 != 0:
+        n_walkers += 1
 
     try:
         cov = np.load(config["opt_jump"])
-        print("using optimal jumps")
-    except:
-        print("using hand-specified jumps")
-        cov = np.diag(utils.convert_dict(config["model"], config["fix_params"], **config["jumps"])**2)
+        print("Using optimal jumps from", config["opt_jump"])
+        spread = np.sqrt(np.diag(cov))
+    except (KeyError, FileNotFoundError):
+        print("Using hand-specified jumps.")
+        spread = utils.convert_dict(model, config["fix_params"],
+                                    **config["jumps"])
 
-    sampler = MHSampler(cov, dim, lnp)
+    rng = np.random.default_rng(config.get("seed", None))
+    p0_walkers = p0_center + spread * rng.standard_normal((n_walkers, dim))
 
-    for i, result in enumerate(sampler.sample(p0, iterations=config["samples"])):
-        if (i+1) % 20 == 0:
-            print("Iteration", i +1)
+    print("Testing starting position …")
+    lnp0 = lnprob(p0_center)
+    if not np.isfinite(lnp0):
+        raise RuntimeError(
+            "Starting position evaluates to -inf. Check config.yaml.")
+    print("Starting lnp: {:.4f}".format(lnp0))
 
-    # Save the actual chain of samples
-    print("Acceptance fraction", sampler.acceptance_fraction)
-    np.save("lnprob.npy", sampler.lnprobability)
-    np.save("flatchain.npy", sampler.flatchain)
+    sampler = emcee.EnsembleSampler(n_walkers, dim, lnprob)
+
+    n_samples = config.get("samples", 1000)
+    print("Running {} walkers for {} steps …".format(n_walkers, n_samples))
+    sampler.run_mcmc(p0_walkers, n_samples, progress=True)
+
+    print("Acceptance fraction:", sampler.acceptance_fraction.mean())
+    np.save(routdir + "flatchain.npy", sampler.get_chain(flat=True))
+    np.save(routdir + "lnprob.npy", sampler.get_log_prob(flat=True))
+
+
+if __name__ == "__main__":
+    main()

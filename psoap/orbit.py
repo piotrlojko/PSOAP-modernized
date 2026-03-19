@@ -486,5 +486,7 @@ class ST3(ST2):
 
         return np.vstack((vAs, vBs, vCs))
 
-# General routines
-models = {"SB1":SB1, "SB2":SB2, "ST1":ST1, "ST2":ST2, "ST3":ST3}
+# Supported spectral models: SB2 (double-lined binary),
+# ST2 (double-lined tertiary, hook), and ST3 (triple-lined tertiary).
+# SB1 and ST1 are retained as base classes for the orbit hierarchy.
+models = {"SB2": SB2, "ST2": ST2, "ST3": ST3}

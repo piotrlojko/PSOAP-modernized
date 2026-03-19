@@ -1,54 +1,63 @@
-# Test config file
-# This is copied to your local directory for each type of MCMC run.
+# PSOAP configuration file for a double-lined spectroscopic binary (SB2).
+# Copy this to your working directory as config.yaml and edit accordingly.
 
-data_file : data.hdf5
+# Text file with two columns: "filename" and "date"
+# filename: path to a 3-column text file (wl[AA], flux, sigma)
+# date: observation date (JD)
+spectra_list: spectra_list.txt
 
-# choice of SB1, SB2, or SB3
+# SB2 model (double-lined)
 model: SB2
 
-# The file that contains the choices of chunks
-chunk_file : chunks.dat
+# Optionally restrict analysis to a wavelength window [Angstroms]
+# wl_min: 5260.0
+# wl_max: 5280.0
 
-# The file that contains the decisions for masking
-mask_file : masks.dat
+# Maximum number of epochs to load (null = load all)
+epoch_limit: ~
 
-epoch_limit : 20
-soften : 1.0
-# Each model has a subset of parameters that are possible to sample for
+# Noise softening factor applied to sigma before GP fitting
+soften: 1.0
 
-# parameters
-# starting position chosen from these parameters
+# Orbital and GP starting parameters
 parameters:
-  q: 0.2
-  K: 1.0 # semi-amplitude of primary [km/s]
-  e: 0.0 # eccentricity
-  omega : 0.0 # argument of periastron [deg]
-  P : 10.0 # period [days]
-  T0 : 0.0 # epoch [Julian Date]
-  gamma : 0.0 # systemic velocity [km/s]
-  amp_f : 0.5 # amplitude of primary GP [flux]
-  l_f : 5.0 # length scale of primary GP [km/s]
-  amp_g : 0.5 # amplitude of secondary GP [flux]
-  l_g : 5.0 # length scale of secondary GP [km/s]
+  q: 0.2          # mass ratio q = M_B / M_A
+  K: 1.0          # semi-amplitude of primary [km/s]
+  e: 0.0          # eccentricity
+  omega: 0.0      # argument of periastron [deg]
+  P: 10.0         # orbital period [days]
+  T0: 0.0         # epoch of periastron passage [JD]
+  gamma: 0.0      # systemic velocity [km/s]
+  amp_f: 0.5      # GP amplitude of primary [flux]
+  l_f: 5.0        # GP length scale of primary [km/s]
+  amp_g: 0.5      # GP amplitude of secondary [flux]
+  l_g: 5.0        # GP length scale of secondary [km/s]
 
-jumps :
+# Step sizes for the MH proposal
+jumps:
   q: 0.01
-  K: 0.2 # semi-amplitude of primary [km/s]
-  e: 0.02 # eccentricity
-  omega : 0.01 # argument of periastron [deg]
-  P : 0.01 # period [days]
-  T0 : 0.01 # epoch [Julian Date]
-  gamma : 0.01 # systemic velocity [km/s]
-  amp_f : 0.05 # amplitude of primary GP [flux]
-  l_f : 0.5 # length scale of primary GP [km/s]
-  amp_g : 0.05 # amplitude of secondary GP [flux]
-  l_g : 0.5 # length scale of secondary GP [km/s]
+  K: 0.2
+  e: 0.02
+  omega: 0.01
+  P: 0.01
+  T0: 0.01
+  gamma: 0.01
+  amp_f: 0.05
+  l_f: 0.5
+  amp_g: 0.05
+  l_g: 0.5
 
-
+# Parameters held fixed during sampling
 fix_params: ["gamma"]
 
-samples : 100
+# Number of MCMC steps
+samples: 1000
 
-opt_jump : opt_jump.npy
+# Random seed for reproducibility (null = unseeded)
+seed: ~
 
-outdir : output
+# Path to optimised jump covariance matrix (optional)
+opt_jump: opt_jump.npy
+
+# Output directory
+outdir: output

@@ -1,96 +1,45 @@
 #!/usr/bin/env python
+"""
+Draw random realizations from the GP posterior for an ST3 model.
+"""
 
 import argparse
-
-parser = argparse.ArgumentParser(description="Reconstruct the composite spectra for A and B component.")
-parser.add_argument("--draws", type=int, default=0, help="In addition to plotting the mean GP, plot several draws of the GP to show the scatter in predicitions.")
-args = parser.parse_args()
-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from astropy.io import ascii
+parser = argparse.ArgumentParser(
+    description="Plot GP draws for the ST3 component spectra.")
+parser.add_argument("--draws", type=int, default=10)
+args = parser.parse_args()
 
-from psoap import constants as C
-from psoap import utils
+plots_dir = "plots_ST3"
 
-import yaml
+mu = np.load(os.path.join(plots_dir, "mu.npy"))
+Sigma = np.load(os.path.join(plots_dir, "Sigma.npy"))
+n_pix_predict = len(mu) // 3
 
-try:
-    f = open("config.yaml")
-    config = yaml.load(f)
-    f.close()
-except FileNotFoundError as e:
-    print("You need to copy a config.yaml file to this directory, and then edit the values to your particular case.")
-    raise
+f_data = np.load(os.path.join(plots_dir, "f.npy"))
+wls_predict = f_data[0]
+mu_f = mu[:n_pix_predict]
+mu_g = mu[n_pix_predict: 2 * n_pix_predict]
+mu_h = mu[2 * n_pix_predict:]
 
-# Load the list of chunks
-chunks = ascii.read(config["chunk_file"])
+mu_draw = np.random.multivariate_normal(mu, Sigma, size=args.draws)
+mu_draw_f = mu_draw[:, :n_pix_predict]
+mu_draw_g = mu_draw[:, n_pix_predict: 2 * n_pix_predict]
+mu_draw_h = mu_draw[:, 2 * n_pix_predict:]
 
-def process_chunk(row):
-    print("processing", row)
-    order, wl0, wl1 = row
+fig, ax = plt.subplots(nrows=3, sharex=True)
+for j in range(args.draws):
+    ax[0].plot(wls_predict, mu_draw_f[j], color="0.2", lw=0.5)
+    ax[1].plot(wls_predict, mu_draw_g[j], color="0.2", lw=0.5)
+    ax[2].plot(wls_predict, mu_draw_h[j], color="0.2", lw=0.5)
 
-
-    plots_dir = "plots_" + C.chunk_fmt.format(order, wl0, wl1)
-    mu = np.load(plots_dir + "/mu.npy")
-    Sigma = np.load(plots_dir + "/Sigma.npy")
-    n_pix_predict = int(len(mu)/3)
-
-    wls_A_predict, f = np.load(plots_dir + "/f.npy")
-    wls_B_predict, g = np.load(plots_dir + "/g.npy")
-    wls_C_predict, h = np.load(plots_dir + "/h.npy")
-
-
-    mu_f = mu[0:n_pix_predict]
-    mu_g = mu[n_pix_predict: 2 * n_pix_predict]
-    mu_h = mu[2 * n_pix_predict:]
-
-    # Make some multivariate draws
-    n_draws = args.draws
-    mu_draw = np.random.multivariate_normal(mu, Sigma, size=n_draws)
-
-    # Reshape the spectra right here
-    mu_draw_f = np.empty((n_draws, n_pix_predict))
-    mu_draw_g = np.empty((n_draws, n_pix_predict))
-    mu_draw_h = np.empty((n_draws, n_pix_predict))
-
-
-    for j in range(n_draws):
-        mu_draw_j = mu_draw[j]
-
-        mu_draw_f[j] = mu_draw_j[0:n_pix_predict]
-        mu_draw_g[j] = mu_draw_j[n_pix_predict: 2 * n_pix_predict]
-        mu_draw_h[j] = mu_draw_j[2 * n_pix_predict:]
-
-    np.save(plots_dir + "/f_draws.npy", mu_draw_f)
-    np.save(plots_dir + "/g_draws.npy", mu_draw_g)
-    np.save(plots_dir + "/h_draws.npy", mu_draw_h)
-
-    # Plot the draws
-    fig, ax = plt.subplots(nrows=3, sharex=True)
-
-    for j in range(n_draws):
-
-        ax[0].plot(wls_A_predict, mu_draw_f[j], color="0.2", lw=0.5)
-        ax[1].plot(wls_B_predict, mu_draw_g[j], color="0.2", lw=0.5)
-        ax[2].plot(wls_C_predict, mu_draw_h[j], color="0.2", lw=0.5)
-
-
-    ax[0].plot(wls_A_predict, mu_f, "b")
-    ax[0].set_ylabel(r"$f$")
-    ax[1].plot(wls_B_predict, mu_g, "g")
-    ax[1].set_ylabel(r"$g$")
-    ax[2].plot(wls_C_predict, mu_h, "r")
-    ax[2].set_ylabel(r"$h$")
-
-
-    ax[-1].set_xlabel(r"$\lambda\,[\AA]$")
-
-    fig.savefig(plots_dir + "/reconstructed.png", dpi=300)
-    plt.close("all")
-
-
-# A laptop (e.g., mine) doesn't have enough memory to do this in parallel, so only serial for now
-for chunk in chunks:
-    process_chunk(chunk)
+ax[0].plot(wls_predict, mu_f, "b"); ax[0].set_ylabel(r"$f$")
+ax[1].plot(wls_predict, mu_g, "g"); ax[1].set_ylabel(r"$g$")
+ax[2].plot(wls_predict, mu_h, "r"); ax[2].set_ylabel(r"$h$")
+ax[-1].set_xlabel(r"$\lambda\;[\AA]$")
+fig.savefig(os.path.join(plots_dir, "reconstructed_draws.png"), dpi=300)
+plt.close("all")
+print("Draws saved to", plots_dir)

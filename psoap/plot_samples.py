@@ -97,9 +97,8 @@ def main():
 
     # If we can tell what type of model we were sampling, we can give everything appropriate labels.
     import yaml
-    f = open(args.config)
-    config = yaml.load(f)
-    f.close()
+    with open(args.config) as f:
+        config = yaml.safe_load(f)
 
     model = config["model"]
     labels = utils.get_labels(model, config["fix_params"])
