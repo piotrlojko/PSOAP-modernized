@@ -30,9 +30,9 @@ Which should build the cython extensions (used for faster matrix evaluations) an
 
     $ psoap-initialize --check
     PSOAP successfully installed and linked.
-    Using Python Version 3.6.3 |Anaconda custom (64-bit)| (default, Nov  3 2017, 19:19:16)
+    Using Python Version 3.12.3
 
-If this doesn't work, try double-checking the output from your install process to see if any errors popped up. If you are unable to fix these issues via the normal means of debugging python installs, please `raise an issue <https://github.com/iancze/PSOAP/issues>`_ with specifics about your system.
+If this doesn't work, try double-checking the output from your install process to see if any errors popped up. If you are unable to fix these issues via the normal means of debugging python installs, please `raise an issue <https://github.com/piotrlojko/PSOAP-modernized/issues>`_ with specifics about your system.
 
 Testing
 -------
@@ -41,7 +41,7 @@ If you really want to make sure everything works on your system, you can run the
 
     $ pytest
 
-If any of these tests fail, please report them by `raising an issue <https://github.com/iancze/PSOAP/issues>`_ with specifics about your system.
+If any of these tests fail, please report them by `raising an issue <https://github.com/piotrlojko/PSOAP-modernized/issues>`_ with specifics about your system.
 
 Citing
 ------
