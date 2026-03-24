@@ -1,45 +1,46 @@
 .. _models:
 
-======
 Models
 ======
 
-As PSOAP has grown, there a number of different possible models available to fit a number of different astrophysical systems.
+PSOAP uses a model code that combines dynamical hierarchy (``SB`` or ``ST``)
+with the number of spectroscopically visible components.
 
-Gravitational bodies
---------------------
-First, we use the following terminology to describe the *number of gravitationally significant bodies in a system*, meaning those bodies that must be factored into an orbital model. A single star would be a "spectroscopic single," or `SS`, a binary star or a single star with an exoplanet would both be called a "spectroscopic binary," or `SB` (hecklers---please excuse the terminology or suggest an improvement), a hierarchical triple star would be called a "spectroscopic triple," or `ST`, and a hierarchical quadruple star (or a double binary) would be called a "spectroscopic quadruple," or `SQ`. More complicated orbital hierarchies can be implemented, but we will need to think more critically about how to name these.
+Supported models in this repository
+-----------------------------------
 
-Spectroscopic bodies
---------------------
-Second, we use a number to describe the *number of spectroscopically significant bodies in a system*. In this case, a single star is `1`, and a star with an exoplanet is also `1`. A double-lined spectroscopic binary would be `2`, and a triple-lined spectroscopic triple would be `3`. However, a single-lined spectroscopic triple would be `1`.
+``SB2``
+    Double-lined spectroscopic binary.
 
-The final model specification is the concatenation of both of these. So a double lined spectroscopic binary is `SB2`, while a single-lined spectroscopic triple is `ST1`. Fortunately, the `1` models permit the usage of the extremely fast `celerite` framework by [Foreman-Mackey et al. 2017](http://adsabs.harvard.edu/abs/2017arXiv170309710F). However, if the system is a multiple star and there is in fact significant flux contribution from the other components, using a single-lined model can deliver biased results.
+``ST2``
+    Hierarchical triple with an inner visible SB2 pair and an outer companion
+    that affects dynamics but is not directly visible spectroscopically.
 
-Specifying orbital models
--------------------------
-Although one would think that we would only need the number of gravitational bodies to specify an orbit (and this is true), we do usually want to know how many spectroscopic bodies there are as well, since there are a different number of orbital parameters that we can constrain based upon how many spectroscopic bodies we see. Therefore `orbit.py` has orbital models for a wide range of models (e.g., `ST1`, `SB2`, etc...).
+``ST3``
+    Hierarchical triple with three visible components.
 
-When this framework grows to include telluric models, or veiling models, these will be denoted with a `+`. For example, a single star with a telluric model would be denoted by `SS1+T`. Unfortunately these additional models are not able to use the fast `celerite` framework.
+Orbital model implementation
+----------------------------
 
-SB2 model quick reference
--------------------------
+Model classes are implemented in :mod:`psoap.orbit` and dispatched through
+``orbit.models``:
 
-For a double-lined spectroscopic binary, both components contribute measurable flux and radial velocity information.
+* ``SB2 -> psoap.orbit.SB2``
+* ``ST2 -> psoap.orbit.ST2``
+* ``ST3 -> psoap.orbit.ST3``
 
-The key orbital parameters are:
+The samplers call ``get_velocities()`` on these models to obtain component
+radial velocities at each epoch.
 
-* ``q`` (mass ratio)
-* ``K`` (semi-amplitude)
-* ``e`` (eccentricity)
-* ``omega`` (argument of periastron)
-* ``P`` (orbital period)
-* ``T0`` (epoch of periastron passage)
-* ``gamma`` (systemic velocity)
+Parameter bookkeeping
+---------------------
 
-The key GP parameters are:
+The canonical parameter order for each model is defined in
+:mod:`psoap.utils` (`registered_params`). This ordering is used consistently by:
 
-* ``amp_f``, ``l_f`` for the primary component spectrum GP
-* ``amp_g``, ``l_g`` for the secondary component spectrum GP
+* config parsing
+* fixed/free parameter conversion
+* sampler vectors
+* plotting labels
 
-For a complete step-by-step workflow, see :ref:`sb2-tutorial`.
+See :ref:`configuration` and :ref:`sb2-tutorial` for practical setup.

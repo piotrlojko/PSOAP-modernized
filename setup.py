@@ -60,6 +60,7 @@ setup(
         "matplotlib>=3.8",
         "pyyaml>=6.0",
         "cython>=3.0",
+        "emcee>=3.1",
     ],
     extras_require={
         "dev": ["check-manifest"],

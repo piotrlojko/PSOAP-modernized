@@ -42,7 +42,7 @@ from psoap import constants as C
 
 
 class Binary:
-    '''
+    r'''
     Binary orbital model that can deliver absolute astrometric position,
     relative astrometric position (B relative to A), and radial velocities for A and B.
 
@@ -325,7 +325,7 @@ class Binary:
 
 
 class Triple:
-    '''
+    r'''
     Triple orbital model that can deliver absolute astrometric position, relative astrometric position (B relative to A, and C relative to A), and radial velocities for A, B, and C.
 
     Args:

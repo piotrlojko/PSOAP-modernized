@@ -3,6 +3,24 @@ Changelog
 =========
 
 ------
+v0.2.0
+------
+
+Documentation and workflow refresh
+----------------------------------
+
+* Removed obsolete ``attic/`` legacy code and outdated notebook-derived docs.
+* Rewrote README and Sphinx docs to match the current CLI and text-based data workflow.
+* Expanded installation, getting started, and SB2 tutorial content with complete runnable steps.
+* Updated documentation metadata and repository links for ``piotrlojko/PSOAP-modernized``.
+
+Packaging consistency
+---------------------
+
+* Aligned ``psoap.__version__`` with package version ``0.2.0``.
+* Added missing runtime dependency ``emcee`` required by ``psoap-sample``.
+
+------
 v0.1.1
 ------
 

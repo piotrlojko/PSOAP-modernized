@@ -1,121 +1,84 @@
-
-.. module:: psoap
-
 .. _scripts:
 
-Scripts
-=======
+Command-line Scripts
+====================
 
-The following scripts are made available on your command-line by the
-``PSOAP`` package.
+PSOAP-modernized installs the following console commands via ``setup.py``.
 
-Initialization
---------------
+psoap-initialize
+----------------
 
-.. code:: python
+Create a local configuration template or verify installation.
 
-    !psoap-initialize --help
+::
 
+    $ psoap-initialize --help
 
-.. parsed-literal::
+Key options:
 
-    usage: psoap-initialize [-h] [--check] [--model {SB1,SB2,ST3}]
-    
-    Initialize a new directory to do inference.
-    
-    optional arguments:
-      -h, --help            show this help message and exit
-      --check               To help folks check whether the package was installed
-                            properly.
-      --model {SB1,SB2,ST3}
-                            Which type of model to use, SB1, SB2, ST1, or SB3.
+* ``--check``: print installation diagnostics
+* ``--model {SB2,ST2,ST3}``: choose config template to copy as ``config.yaml``
 
+Example:
 
-.. code:: python
+::
 
-    !psoap-generate-chunks --help
+    $ psoap-initialize --model SB2
 
+psoap-sample
+------------
 
-.. parsed-literal::
+Single-core MCMC sampler using ``emcee``.
 
-    /usr/bin/sh: psoap-generate-chunks: command not found
+::
 
+    $ psoap-sample --help
 
-.. code:: python
+Key options:
 
-    !psoap-process-chunks --help
+* ``--run-index``: output run number (default ``0``)
+* ``--debug``: enable detailed logging in run output directory
 
+Example:
 
-.. parsed-literal::
+::
 
-    /usr/bin/sh: psoap-process-chunks: command not found
+    $ psoap-sample --run-index 0
 
+psoap-sample-parallel
+---------------------
 
-.. code:: python
+Parallel Metropolis-Hastings sampler using one process per wavelength chunk.
 
-    !psoap-generate-masks --help
+::
 
+    $ psoap-sample-parallel --help
 
-.. parsed-literal::
+Usage requires positional run index:
 
-    /usr/bin/sh: psoap-generate-masks: command not found
+::
 
+    $ psoap-sample-parallel 0
 
-.. code:: python
+psoap-plot-samples
+------------------
 
-    !psoap-process-masks --help
+Post-processing tool for chain diagnostics and summary statistics. Run it in a
+run directory that contains ``flatchain.npy``.
 
+::
 
-.. parsed-literal::
+    $ psoap-plot-samples --help
 
-    /usr/bin/sh: psoap-process-masks: command not found
+Common options:
 
+* ``--burn N``: discard first ``N`` samples
+* ``--cov``: estimate and save ``opt_jump.npy``
+* ``--tri``: also create a corner plot (requires ``corner`` package)
 
-Sampling
---------
+Example:
 
-The following scripts are used in sampling the posterior distribution.
+::
 
-.. code:: python
-
-    !psoap-sample --help
-
-
-.. parsed-literal::
-
-    You need to copy a config.yaml file to this directory, and then edit the values to your particular case.
-    Traceback (most recent call last):
-      File "/home/ian/.build/anaconda/bin/psoap-sample", line 11, in <module>
-        load_entry_point('psoap==0.0.1', 'console_scripts', 'psoap-sample')()
-      File "/home/ian/.build/anaconda/lib/python3.6/site-packages/pkg_resources/__init__.py", line 570, in load_entry_point
-        return get_distribution(dist).load_entry_point(group, name)
-      File "/home/ian/.build/anaconda/lib/python3.6/site-packages/pkg_resources/__init__.py", line 2751, in load_entry_point
-        return ep.load()
-      File "/home/ian/.build/anaconda/lib/python3.6/site-packages/pkg_resources/__init__.py", line 2405, in load
-        return self.resolve()
-      File "/home/ian/.build/anaconda/lib/python3.6/site-packages/pkg_resources/__init__.py", line 2411, in resolve
-        module = __import__(self.module_name, fromlist=['__name__'], level=0)
-      File "/home/ian/.build/anaconda/lib/python3.6/site-packages/psoap-0.0.1-py3.6-linux-x86_64.egg/psoap/sample.py", line 33, in <module>
-        f = open("config.yaml")
-    FileNotFoundError: [Errno 2] No such file or directory: 'config.yaml'
-
-
-.. code:: python
-
-    !psoap-sample-parallel --help
-
-
-.. parsed-literal::
-
-    usage: psoap-sample-parallel [-h] [--debug] run_index
-    
-    Sample the distribution across multiple chunks.
-    
-    positional arguments:
-      run_index   Which output subdirectory to save this particular run, in the
-                  case you may be running multiple concurrently.
-    
-    optional arguments:
-      -h, --help  show this help message and exit
-      --debug     Print out debug commands to log.log
-
+    $ cd output/run00
+    $ psoap-plot-samples --burn 200 --cov
