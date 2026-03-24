@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>SB2 Spectral Disentangling Tutorial &#8212; PSOAP 0.2.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=c8c5a04b"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex/" />
+    <link rel="search" title="Search" href="../search/" />
+    <link rel="next" title="Tutorial" href="../tutorial/" />
+    <link rel="prev" title="Models" href="../models/" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="sb2-spectral-disentangling-tutorial">
+<span id="sb2-tutorial"></span><h1>SB2 Spectral Disentangling Tutorial<a class="headerlink" href="#sb2-spectral-disentangling-tutorial" title="Link to this heading">¶</a></h1>
+<p>This tutorial walks through a practical end-to-end SB2 run using the current
+PSOAP-modernized command-line workflow.</p>
+<section id="prepare-an-analysis-directory">
+<h2>1. Prepare an analysis directory<a class="headerlink" href="#prepare-an-analysis-directory" title="Link to this heading">¶</a></h2>
+<p>Create and enter a clean working directory:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ mkdir sb2-demo
+$ cd sb2-demo
+</pre></div>
+</div>
+<p>Initialize the SB2 configuration template:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ psoap-initialize --model SB2
+</pre></div>
+</div>
+<p>You now have a <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>.</p>
+</section>
+<section id="prepare-input-files">
+<h2>2. Prepare input files<a class="headerlink" href="#prepare-input-files" title="Link to this heading">¶</a></h2>
+<p>Create <code class="docutils literal notranslate"><span class="pre">spectra_list.txt</span></code> with two whitespace-separated columns named
+<code class="docutils literal notranslate"><span class="pre">filename</span></code> and <code class="docutils literal notranslate"><span class="pre">date</span></code>. Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">filename</span> <span class="n">date</span>
+<span class="n">data</span><span class="o">/</span><span class="n">epoch_001</span><span class="o">.</span><span class="n">txt</span> <span class="mf">2459001.1234</span>
+<span class="n">data</span><span class="o">/</span><span class="n">epoch_002</span><span class="o">.</span><span class="n">txt</span> <span class="mf">2459004.5678</span>
+</pre></div>
+</div>
+<p>Each <code class="docutils literal notranslate"><span class="pre">epoch_XXX.txt</span></code> must be a 3-column file:</p>
+<ul class="simple">
+<li><p>wavelength in Angstrom</p></li>
+<li><p>normalized flux (continuum near 1)</p></li>
+<li><p>per-pixel sigma</p></li>
+</ul>
+</section>
+<section id="configure-config-yaml">
+<h2>3. Configure <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code><a class="headerlink" href="#configure-config-yaml" title="Link to this heading">¶</a></h2>
+<p>At minimum, verify and edit:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">spectra_list</span></code> path</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model:</span> <span class="pre">SB2</span></code></p></li>
+<li><p>orbital parameters in <code class="docutils literal notranslate"><span class="pre">parameters</span></code>:
+<code class="docutils literal notranslate"><span class="pre">q,</span> <span class="pre">K,</span> <span class="pre">e,</span> <span class="pre">omega,</span> <span class="pre">P,</span> <span class="pre">T0,</span> <span class="pre">gamma</span></code></p></li>
+<li><p>GP parameters:
+<code class="docutils literal notranslate"><span class="pre">amp_f,</span> <span class="pre">l_f,</span> <span class="pre">amp_g,</span> <span class="pre">l_g</span></code></p></li>
+<li><p>proposal scales in <code class="docutils literal notranslate"><span class="pre">jumps</span></code></p></li>
+<li><p>fixed parameters in <code class="docutils literal notranslate"><span class="pre">fix_params</span></code></p></li>
+<li><p>run controls: <code class="docutils literal notranslate"><span class="pre">samples</span></code>, <code class="docutils literal notranslate"><span class="pre">seed</span></code>, <code class="docutils literal notranslate"><span class="pre">outdir</span></code></p></li>
+</ul>
+<p>Optional wavelength restriction:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">wl_min</span><span class="p">:</span> <span class="mf">5260.0</span>
+<span class="n">wl_max</span><span class="p">:</span> <span class="mf">5280.0</span>
+</pre></div>
+</div>
+</section>
+<section id="run-the-sampler">
+<h2>4. Run the sampler<a class="headerlink" href="#run-the-sampler" title="Link to this heading">¶</a></h2>
+<p>Single-core (<code class="docutils literal notranslate"><span class="pre">emcee</span></code>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ psoap-sample --run-index 0
+</pre></div>
+</div>
+<p>Parallel chunked likelihood:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ psoap-sample-parallel 0
+</pre></div>
+</div>
+<p>Both workflows write output to <code class="docutils literal notranslate"><span class="pre">outdir/runXX/</span></code>.</p>
+</section>
+<section id="inspect-and-summarize-chains">
+<h2>5. Inspect and summarize chains<a class="headerlink" href="#inspect-and-summarize-chains" title="Link to this heading">¶</a></h2>
+<p>Move into the run directory and generate diagnostics:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ cd output/run00
+$ psoap-plot-samples --burn 200 --cov
+</pre></div>
+</div>
+<p>Typical outputs:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">chain.png</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">flatchain.npy</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lnprob.npy</span></code></p></li>
+<li><p>optional <code class="docutils literal notranslate"><span class="pre">opt_jump.npy</span></code></p></li>
+</ul>
+<p>If using <code class="docutils literal notranslate"><span class="pre">--tri</span></code>, a corner plot is also produced (requires the <code class="docutils literal notranslate"><span class="pre">corner</span></code>
+Python package).</p>
+</section>
+<section id="iterate">
+<h2>6. Iterate<a class="headerlink" href="#iterate" title="Link to this heading">¶</a></h2>
+<p>Use early runs to tune:</p>
+<ul class="simple">
+<li><p>initial <code class="docutils literal notranslate"><span class="pre">parameters</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">jumps</span></code> or <code class="docutils literal notranslate"><span class="pre">opt_jump</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">samples</span></code> length</p></li>
+<li><p>fixed vs free parameter choices</p></li>
+</ul>
+<p>Then rerun until chains are stable and physically plausible.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../">PSOAP</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../scripts/">Command-line Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../models/">Models</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">SB2 Spectral Disentangling Tutorial</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#prepare-an-analysis-directory">1. Prepare an analysis directory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#prepare-input-files">2. Prepare input files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configure-config-yaml">3. Configure <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#run-the-sampler">4. Run the sampler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#inspect-and-summarize-chains">5. Inspect and summarize chains</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#iterate">6. Iterate</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorial/">Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../orbit/">Orbit Routines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../data/">Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../covariance/">Covariance Routines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sampling/">Sampling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reconstruction/">Reconstruction and Diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog/">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../">Documentation overview</a><ul>
+      <li>Previous: <a href="../models/" title="previous chapter">Models</a></li>
+      <li>Next: <a href="../tutorial/" title="next chapter">Tutorial</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2017-2026, PSOAP contributors.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/sb2-tutorial.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>psoap.orbit &#8212; PSOAP 0.2.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=27fed22d" />
+    <script src="../../../_static/documentation_options.js?v=c8c5a04b"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../genindex/" />
+    <link rel="search" title="Search" href="../../../search/" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for psoap.orbit</h1><div class="highlight"><pre>
+<span></span><span class="sa">r</span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">Orbital conventions derived according to</span>
+
+<span class="sd">.. math::</span>
+
+<span class="sd">      v_{r,1} = K_1 (\cos (\omega_1 + f) + e \cos \omega_1) \\</span>
+<span class="sd">      v_{r,2} = K_2 (\cos (\omega_2 + f) + e \cos \omega_2)</span>
+
+<span class="sd">where a positive :math:`v_r` indicates a redshifted source and :math:`\omega_2 = \omega_1 + \pi`. In an RV-only paper, typically authors report :math:`\omega = \omega_1`.</span>
+
+<span class="sd">In general, quantities like ``vA``, ``vB``, and ``vC`` refer to radial velocities relative to the heliocentric frame of the earth, i.e., quantities to directly compare to actual radial velocity measurements.</span>
+
+<span class="sd">(Private) quantities like ``v1``, ``v2``, ``v1_in``, and ``v1_out`` have more subtle meanings---these are generally partial velocities used in the process of constructing ``vA``, etc...</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">scipy.optimize</span> <span class="kn">import</span> <span class="n">fsolve</span>
+<span class="kn">from</span> <span class="nn">psoap</span> <span class="kn">import</span> <span class="n">utils</span>
+
+<div class="viewcode-block" id="SB1">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.SB1">[docs]</a>
+<span class="k">class</span> <span class="nc">SB1</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Orbital model for a single-line spectroscopic binary.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        K (float): velocity semi-amplitude</span>
+<span class="sd">        e (float): eccentricity (must be between ``[0.0, 1.0)``)</span>
+<span class="sd">        omega (float): argument of periastron for the primary star (degrees)</span>
+<span class="sd">        P (float): period (days)</span>
+<span class="sd">        T0 (float): epoch of periastron (JD)</span>
+<span class="sd">        gamma (float): systemic velocity (km/s)</span>
+<span class="sd">        obs_dates (1D np.array): dates of observation (JD)</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">K</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">omega</span><span class="p">,</span> <span class="n">P</span><span class="p">,</span> <span class="n">T0</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">obs_dates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="p">(</span><span class="n">e</span> <span class="o">&gt;=</span> <span class="mf">0.0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">e</span> <span class="o">&lt;</span> <span class="mf">1.0</span><span class="p">),</span> <span class="s2">&quot;Eccentricity must be between [0, 1)&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">=</span> <span class="n">K</span> <span class="c1"># [km/s]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">e</span> <span class="o">=</span> <span class="n">e</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">omega</span> <span class="o">=</span> <span class="n">omega</span> <span class="c1"># [deg]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">P</span> <span class="o">=</span> <span class="n">P</span> <span class="c1"># [days]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">T0</span> <span class="o">=</span> <span class="n">T0</span> <span class="c1"># [JD]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span> <span class="o">=</span> <span class="n">gamma</span> <span class="c1"># [km/s]</span>
+
+        <span class="c1"># If we are going to be repeatedly predicting the orbit at a sequence of dates,</span>
+        <span class="c1"># just store them to the object.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="o">=</span> <span class="n">obs_dates</span>
+
+
+    <span class="k">def</span> <span class="nf">_f</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Calculate the true anomoly :math:`f` for the A-B orbit.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            t (float): time to evaluate true anomaly at [days].</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            float: true anomaly</span>
+<span class="sd">            &#39;&#39;&#39;</span>
+
+        <span class="c1"># t is input in seconds</span>
+
+        <span class="c1"># Take a modulus of the period</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="p">(</span><span class="n">t</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">T0</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">P</span>
+
+        <span class="n">f</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">E</span><span class="p">:</span> <span class="n">E</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">e</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">E</span><span class="p">)</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">t</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">P</span>
+        <span class="n">E0</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">t</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">P</span>
+
+        <span class="n">E</span> <span class="o">=</span> <span class="n">fsolve</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">E0</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">th</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="mi">1</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">e</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">e</span><span class="p">))</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">tan</span><span class="p">(</span><span class="n">E</span><span class="o">/</span><span class="mf">2.</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">E</span> <span class="o">&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">th</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">th</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+
+    <span class="k">def</span> <span class="nf">_v1_f</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Calculate the component of A&#39;s velocity based on only the inner orbit.</span>
+
+<span class="sd">        Args: f (float): true anomaly of inner orbit.</span>
+
+<span class="sd">        Returns: velocity of A (no systemic velocity included).&#39;&#39;&#39;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">K</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span> <span class="o">+</span> <span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">e</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_vA_t</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="c1"># Get the true anomoly &quot;f&quot; from time</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_f</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+        <span class="c1"># Feed this into the orbit equation and add the systemic velocity</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_v1_f</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span>
+
+
+<div class="viewcode-block" id="SB1.get_velocities">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.SB1.get_velocities">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_velocities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dates</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Calculate the velocities of the primary (``vA``) for all dates provided.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dates (optional): if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            np.array: A ``(1, nvels)`` shape array of the primary velocities</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Must provide input dates or specify observation dates upon creation of orbit object.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span>
+
+        <span class="n">dates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">dates</span><span class="p">)</span>
+
+        <span class="n">vAs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_vA_t</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_2d</span><span class="p">(</span><span class="n">vAs</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="SB2">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.SB2">[docs]</a>
+<span class="k">class</span> <span class="nc">SB2</span><span class="p">(</span><span class="n">SB1</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Orbital model for a double-line spectroscopic binary.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        q (float): mass ratio ``M_B / M_A``</span>
+<span class="sd">        K (float): velocity semi-amplitude</span>
+<span class="sd">        e (float): eccentricity (must be between ``[0.0, 1.0)``)</span>
+<span class="sd">        omega (float): argument of periastron for primary star (degrees)</span>
+<span class="sd">        P (float): period (days)</span>
+<span class="sd">        T0 (float): epoch of periastron (JD)</span>
+<span class="sd">        gamma (float): systemic velocity (km/s)</span>
+<span class="sd">        obs_dates (1D np.array): dates of observation (JD)</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">K</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">omega</span><span class="p">,</span> <span class="n">P</span><span class="p">,</span> <span class="n">T0</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">obs_dates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">K</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">omega</span><span class="p">,</span> <span class="n">P</span><span class="p">,</span> <span class="n">T0</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">obs_dates</span><span class="o">=</span><span class="n">obs_dates</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">=</span> <span class="n">q</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">omega_2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">omega</span> <span class="o">+</span> <span class="mi">180</span> <span class="c1"># calculate the argument of periastron for the secondary star</span>
+
+    <span class="k">def</span> <span class="nf">_v2_f</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Calculate the component of B&#39;s velocity based on only the inner orbit.</span>
+<span class="sd">        f is the true anomoly of this inner orbit.&#39;&#39;&#39;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">K</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">q</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span> <span class="o">+</span> <span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">e</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_vB_t</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_f</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+        <span class="c1"># Feed this into the orbit equation and add the systemic velocity</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_v2_f</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span>
+
+<div class="viewcode-block" id="SB2.get_velocities">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.SB2.get_velocities">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_velocities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dates</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Calculate the velocities of the primary (``vA``) and secondary (``vB``) for all dates provided.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dates (optional): if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            np.array: A ``(2, nvels)`` shape array of the primary and secondary velocities</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Must provide input dates or specify observation dates upon creation of orbit object.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span>
+
+        <span class="n">dates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">dates</span><span class="p">)</span>
+
+        <span class="n">vAs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_vA_t</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+        <span class="n">vBs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_vB_t</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">vAs</span><span class="p">,</span> <span class="n">vBs</span><span class="p">))</span></div>
+</div>
+
+
+<div class="viewcode-block" id="ST1">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.ST1">[docs]</a>
+<span class="k">class</span> <span class="nc">ST1</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Orbital model for a single-line hierarchical spectroscopic triple.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        K_in (float): velocity semi-amplitude for inner orbit</span>
+<span class="sd">        e_in (float): eccentricity for inner orbit (must be between ``[0.0, 1.0)``)</span>
+<span class="sd">        omega_in (float): argument of periastron for inner orbit (primary star) (degrees)</span>
+<span class="sd">        P_in (float): inner period (days)</span>
+<span class="sd">        T0_in (float): epoch of periastron for inner orbit (JD)</span>
+<span class="sd">        K_out (float): velocity semi-amplitude for outer orbit</span>
+<span class="sd">        e_out (float): eccentricity for outer orbit (must be between ``[0.0, 1.0)``)</span>
+<span class="sd">        omega_out (float): argument of periastron for outer orbit (primary stars) (degrees)</span>
+<span class="sd">        P_out (float): outer period (days)</span>
+<span class="sd">        T0_out (float): epoch of periastron for outer orbit (JD)</span>
+<span class="sd">        gamma (float): systemic velocity (km/s)</span>
+<span class="sd">        obs_dates (1D np.array): dates of observation (JD)</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">K_in</span><span class="p">,</span> <span class="n">e_in</span><span class="p">,</span> <span class="n">omega_in</span><span class="p">,</span> <span class="n">P_in</span><span class="p">,</span> <span class="n">T0_in</span><span class="p">,</span> <span class="n">K_out</span><span class="p">,</span> <span class="n">e_out</span><span class="p">,</span> <span class="n">omega_out</span><span class="p">,</span> <span class="n">P_out</span><span class="p">,</span> <span class="n">T0_out</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">obs_dates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="p">(</span><span class="n">e_in</span> <span class="o">&gt;=</span> <span class="mf">0.0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">e_in</span> <span class="o">&lt;</span> <span class="mf">1.0</span><span class="p">),</span> <span class="s2">&quot;Inner eccentricity must be between [0, 1)&quot;</span>
+        <span class="k">assert</span> <span class="p">(</span><span class="n">e_out</span> <span class="o">&gt;=</span> <span class="mf">0.0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">e_out</span> <span class="o">&lt;</span> <span class="mf">1.0</span><span class="p">),</span> <span class="s2">&quot;Outer eccentricity must be between [0, 1)&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">K_in</span> <span class="o">=</span> <span class="n">K_in</span> <span class="c1"># [km/s]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">e_in</span> <span class="o">=</span> <span class="n">e_in</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">omega_in</span> <span class="o">=</span> <span class="n">omega_in</span> <span class="c1"># [deg]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">P_in</span> <span class="o">=</span> <span class="n">P_in</span> <span class="c1"># [days]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">T0_in</span> <span class="o">=</span> <span class="n">T0_in</span> <span class="c1"># [JD]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">K_out</span> <span class="o">=</span> <span class="n">K_out</span> <span class="c1"># [km/s]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">e_out</span> <span class="o">=</span> <span class="n">e_out</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">omega_out</span> <span class="o">=</span> <span class="n">omega_out</span> <span class="c1"># [deg]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">P_out</span> <span class="o">=</span> <span class="n">P_out</span> <span class="c1"># [days]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">T0_out</span> <span class="o">=</span> <span class="n">T0_out</span> <span class="c1"># [JD]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span> <span class="o">=</span> <span class="n">gamma</span> <span class="c1"># [km/s]</span>
+
+        <span class="c1"># If we are going to be repeatedly predicting the orbit at a sequence of dates,</span>
+        <span class="c1"># just store them to the object.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="o">=</span> <span class="n">obs_dates</span>
+
+    <span class="k">def</span> <span class="nf">_f_in</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Calculate the true anomoly for the A-B orbit.&#39;&#39;&#39;</span>
+
+        <span class="c1"># t is input in seconds</span>
+
+        <span class="c1"># Take a modulus of the period</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="p">(</span><span class="n">t</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">T0_in</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">P_in</span>
+
+        <span class="n">f</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">E</span><span class="p">:</span> <span class="n">E</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_in</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">E</span><span class="p">)</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">t</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">P_in</span>
+        <span class="n">E0</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">t</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">P_in</span>
+
+        <span class="n">E</span> <span class="o">=</span> <span class="n">fsolve</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">E0</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">th</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="mi">1</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_in</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_in</span><span class="p">))</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">tan</span><span class="p">(</span><span class="n">E</span><span class="o">/</span><span class="mf">2.</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">E</span> <span class="o">&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">th</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">th</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+
+    <span class="k">def</span> <span class="nf">_f_out</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Calculate the true anomoly for the (A-B) - C orbit.&#39;&#39;&#39;</span>
+
+        <span class="c1"># t is input in seconds</span>
+
+        <span class="c1"># Take a modulus of the period</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="p">(</span><span class="n">t</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">T0_out</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">P_out</span>
+
+        <span class="n">f</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">E</span><span class="p">:</span> <span class="n">E</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_out</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">E</span><span class="p">)</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">t</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">P_out</span>
+        <span class="n">E0</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">t</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">P_out</span>
+
+        <span class="n">E</span> <span class="o">=</span> <span class="n">fsolve</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">E0</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">th</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="mi">1</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_out</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_out</span><span class="p">))</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">tan</span><span class="p">(</span><span class="n">E</span><span class="o">/</span><span class="mf">2.</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="n">E</span> <span class="o">&lt;</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">th</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">th</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+
+    <span class="k">def</span> <span class="nf">_v1_f</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Calculate the component of A&#39;s velocity based on only the inner orbit.</span>
+<span class="sd">        f is the true anomoly of this inner orbit.&#39;&#39;&#39;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">K_in</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_in</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span> <span class="o">+</span> <span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_in</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_in</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_v3_f</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Calculate the velocity of (A-B) based only on the outer orbit.</span>
+<span class="sd">        f is the true anomoly of the outer orbit&#39;&#39;&#39;</span>
+        <span class="k">return</span>  <span class="bp">self</span><span class="o">.</span><span class="n">K_out</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_out</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span> <span class="o">+</span> <span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_out</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_out</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_vA_t</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+
+        <span class="c1"># Get the true anomoly &quot;f&quot; from time</span>
+        <span class="n">f_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_f_in</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+        <span class="n">f_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_f_out</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+        <span class="n">v1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_v1_f</span><span class="p">(</span><span class="n">f_in</span><span class="p">)</span>
+        <span class="n">v3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_v3_f</span><span class="p">(</span><span class="n">f_out</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">v1</span> <span class="o">+</span> <span class="n">v3</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span>
+
+<div class="viewcode-block" id="ST1.get_component_velocities">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.ST1.get_component_velocities">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_component_velocities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dates</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Routine to grab v1_inner and v1_outer.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dates (optional): if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            np.array: A ``(1, nvels)`` shape array of the primary velocities for the outer motion</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Must provide input dates or specify observation dates upon creation of orbit object.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span>
+
+        <span class="n">dates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">dates</span><span class="p">)</span>
+
+        <span class="c1"># calculate f_in and f_out for all dates</span>
+        <span class="n">f_ins</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_f_in</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+        <span class="n">f_outs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_f_out</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+
+        <span class="n">v1s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_v1_f</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">f_ins</span><span class="p">])</span>
+        <span class="n">v3s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_v3_f</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">f_outs</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">v1s</span><span class="p">,</span> <span class="n">v3s</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="ST1.get_velocities">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.ST1.get_velocities">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_velocities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dates</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Calculate the velocities of the primary (``vA``) for all dates provided.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dates (optional): if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            np.array: A ``(1, nvels)`` shape array of the primary velocities</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Must provide input dates or specify observation dates upon creation of orbit object.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span>
+
+        <span class="n">dates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">dates</span><span class="p">)</span>
+
+        <span class="n">vAs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_vA_t</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_2d</span><span class="p">(</span><span class="n">vAs</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ST2">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.ST2">[docs]</a>
+<span class="k">class</span> <span class="nc">ST2</span><span class="p">(</span><span class="n">ST1</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Orbital model for a double-line (inner orbit) hierarchical spectroscopic triple.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        q_in (float): mass ratio ``M_B / M_A``</span>
+<span class="sd">        K_in (float): velocity semi-amplitude for inner orbit</span>
+<span class="sd">        e_in (float): eccentricity for inner orbit (must be between ``[0.0, 1.0)``)</span>
+<span class="sd">        omega_in (float): argument of periastron for inner orbit (degrees)</span>
+<span class="sd">        P_in (float): inner period (days)</span>
+<span class="sd">        T0_in (float): epoch of periastron for inner orbit (JD)</span>
+<span class="sd">        K_out (float): velocity semi-amplitude for outer orbit</span>
+<span class="sd">        e_out (float): eccentricity for outer orbit (must be between ``[0.0, 1.0)``)</span>
+<span class="sd">        omega_out (float): argument of periastron for outer orbit (degrees)</span>
+<span class="sd">        P_out (float): outer period (days)</span>
+<span class="sd">        T0_out (float): epoch of periastron for outer orbit (JD)</span>
+<span class="sd">        gamma (float): systemic velocity (km/s)</span>
+<span class="sd">        obs_dates (1D np.array): dates of observation (JD)</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">q_in</span><span class="p">,</span> <span class="n">K_in</span><span class="p">,</span> <span class="n">e_in</span><span class="p">,</span> <span class="n">omega_in</span><span class="p">,</span> <span class="n">P_in</span><span class="p">,</span> <span class="n">T0_in</span><span class="p">,</span> <span class="n">K_out</span><span class="p">,</span> <span class="n">e_out</span><span class="p">,</span> <span class="n">omega_out</span><span class="p">,</span> <span class="n">P_out</span><span class="p">,</span> <span class="n">T0_out</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">obs_dates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">K_in</span><span class="p">,</span> <span class="n">e_in</span><span class="p">,</span> <span class="n">omega_in</span><span class="p">,</span> <span class="n">P_in</span><span class="p">,</span> <span class="n">T0_in</span><span class="p">,</span> <span class="n">K_out</span><span class="p">,</span> <span class="n">e_out</span><span class="p">,</span> <span class="n">omega_out</span><span class="p">,</span> <span class="n">P_out</span><span class="p">,</span> <span class="n">T0_out</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">obs_dates</span><span class="o">=</span><span class="n">obs_dates</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">q_in</span> <span class="o">=</span> <span class="n">q_in</span> <span class="c1"># [M2/M1]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">omega_in_2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">omega_in</span> <span class="o">+</span> <span class="mi">180</span>
+
+    <span class="k">def</span> <span class="nf">_v2_f</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Calculate the component of B&#39;s velocity based on only the inner orbit.</span>
+<span class="sd">        f is the true anomoly of this inner orbit.&#39;&#39;&#39;</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">K_in</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">q_in</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_in_2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span> <span class="o">+</span> <span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_in</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_in_2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">_vB_t</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+
+        <span class="c1"># Get the true anolomy &quot;f&quot; from time</span>
+        <span class="n">f_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_f_in</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+        <span class="n">f_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_f_out</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+        <span class="n">v2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_v2_f</span><span class="p">(</span><span class="n">f_in</span><span class="p">)</span>
+        <span class="n">v3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_v3_f</span><span class="p">(</span><span class="n">f_out</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">v2</span> <span class="o">+</span> <span class="n">v3</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span>
+
+<div class="viewcode-block" id="ST2.get_component_velocities">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.ST2.get_component_velocities">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_component_velocities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dates</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Routine to grab v1_inner and v1_outer.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dates (optional): if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            np.array: A ``(1, nvels)`` shape array of the primary velocities for the outer motion</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Must provide input dates or specify observation dates upon creation of orbit object.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span>
+
+        <span class="n">dates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">dates</span><span class="p">)</span>
+
+        <span class="c1"># calculate f_in and f_out for all dates</span>
+        <span class="n">f_ins</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_f_in</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+        <span class="n">f_outs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_f_out</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+
+        <span class="n">v1s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_v1_f</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">f_ins</span><span class="p">])</span>
+        <span class="n">v2s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_v2_f</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">f_ins</span><span class="p">])</span>
+        <span class="n">v3s</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_v3_f</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">f_outs</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">v1s</span><span class="p">,</span> <span class="n">v2s</span><span class="p">,</span> <span class="n">v3s</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="ST2.get_velocities">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.ST2.get_velocities">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_velocities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dates</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Calculate the velocities of the primary (``vA``) and secondary (``vB``) for all dates provided.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dates (optional): if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            np.array: A ``(2, nvels)`` shape array of the primary and secondary velocities</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Must provide input dates or specify observation dates upon creation of orbit object.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span>
+
+        <span class="n">dates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">dates</span><span class="p">)</span>
+
+
+        <span class="n">vAs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_vA_t</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+        <span class="n">vBs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_vB_t</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">vAs</span><span class="p">,</span> <span class="n">vBs</span><span class="p">))</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="ST3">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.ST3">[docs]</a>
+<span class="k">class</span> <span class="nc">ST3</span><span class="p">(</span><span class="n">ST2</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    Orbital model for a double-line (inner orbit) hierarchical spectroscopic triple.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        q_in (float): mass ratio ``M_B / M_A``</span>
+<span class="sd">        K_in (float): velocity semi-amplitude for inner orbit</span>
+<span class="sd">        e_in (float): eccentricity for inner orbit (must be between ``[0.0, 1.0)``)</span>
+<span class="sd">        omega_in (float): argument of periastron for inner orbit (degrees)</span>
+<span class="sd">        P_in (float): inner period (days)</span>
+<span class="sd">        T0_in (float): epoch of periastron for inner orbit (JD)</span>
+<span class="sd">        q_out (float): mass ratio ``M_C / (M_A + M_B)``</span>
+<span class="sd">        K_out (float): velocity semi-amplitude for outer orbit</span>
+<span class="sd">        e_out (float): eccentricity for outer orbit (must be between ``[0.0, 1.0)``)</span>
+<span class="sd">        omega_out (float): argument of periastron for outer orbit (degrees)</span>
+<span class="sd">        P_out (float): outer period (days)</span>
+<span class="sd">        T0_out (float): epoch of periastron for outer orbit (JD)</span>
+<span class="sd">        gamma (float): systemic velocity (km/s)</span>
+<span class="sd">        obs_dates (1D np.array): dates of observation (JD)</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">q_in</span><span class="p">,</span> <span class="n">K_in</span><span class="p">,</span> <span class="n">e_in</span><span class="p">,</span> <span class="n">omega_in</span><span class="p">,</span> <span class="n">P_in</span><span class="p">,</span> <span class="n">T0_in</span><span class="p">,</span> <span class="n">q_out</span><span class="p">,</span> <span class="n">K_out</span><span class="p">,</span> <span class="n">e_out</span><span class="p">,</span> <span class="n">omega_out</span><span class="p">,</span> <span class="n">P_out</span><span class="p">,</span> <span class="n">T0_out</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">obs_dates</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">q_in</span><span class="p">,</span> <span class="n">K_in</span><span class="p">,</span> <span class="n">e_in</span><span class="p">,</span> <span class="n">omega_in</span><span class="p">,</span> <span class="n">P_in</span><span class="p">,</span> <span class="n">T0_in</span><span class="p">,</span> <span class="n">K_out</span><span class="p">,</span> <span class="n">e_out</span><span class="p">,</span> <span class="n">omega_out</span><span class="p">,</span> <span class="n">P_out</span><span class="p">,</span> <span class="n">T0_out</span><span class="p">,</span> <span class="n">gamma</span><span class="p">,</span> <span class="n">obs_dates</span><span class="o">=</span><span class="n">obs_dates</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">q_out</span> <span class="o">=</span> <span class="n">q_out</span> <span class="c1"># [M2/M1]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">omega_out_2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">omega_out</span> <span class="o">+</span> <span class="mi">180</span>
+
+    <span class="k">def</span> <span class="nf">_v3_f_C</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">f</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;Calculate the velocity of C based only on the outer orbit.</span>
+<span class="sd">        f is the true anomoly of the outer orbit</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">K_out</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">q_out</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_out_2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span> <span class="o">+</span> <span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">e_out</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">omega_out_2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">/</span><span class="mi">180</span><span class="p">))</span>
+
+
+    <span class="k">def</span> <span class="nf">_vC_t</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+
+        <span class="c1"># Get the true anolomy &quot;f&quot; from time</span>
+        <span class="n">f_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_f_out</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+        <span class="n">v3</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_v3_f_C</span><span class="p">(</span><span class="n">f_out</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">v3</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">gamma</span>
+
+
+<div class="viewcode-block" id="ST3.get_velocities">
+<a class="viewcode-back" href="../../../orbit/#psoap.orbit.ST3.get_velocities">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_velocities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dates</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Calculate the velocities of the primary (``vA``), secondary (``vB``), and tertiary (``vC``) for all dates provided.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            dates (optional): if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            np.array: A ``(3, nvels)`` shape array of the primary, secondary, and tertiary velocities</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Must provide input dates or specify observation dates upon creation of orbit object.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">dates</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">obs_dates</span>
+
+        <span class="n">dates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">dates</span><span class="p">)</span>
+
+
+        <span class="n">vAs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_vA_t</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+        <span class="n">vBs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_vB_t</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+        <span class="n">vCs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_vC_t</span><span class="p">(</span><span class="n">date</span><span class="p">)</span> <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">vstack</span><span class="p">((</span><span class="n">vAs</span><span class="p">,</span> <span class="n">vBs</span><span class="p">,</span> <span class="n">vCs</span><span class="p">))</span></div>
+</div>
+
+
+<span class="c1"># Supported spectral models: SB2 (double-lined binary),</span>
+<span class="c1"># ST2 (double-lined tertiary, hook), and ST3 (triple-lined tertiary).</span>
+<span class="c1"># SB1 and ST1 are retained as base classes for the orbit hierarchy.</span>
+<span class="n">models</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;SB2&quot;</span><span class="p">:</span> <span class="n">SB2</span><span class="p">,</span> <span class="s2">&quot;ST2&quot;</span><span class="p">:</span> <span class="n">ST2</span><span class="p">,</span> <span class="s2">&quot;ST3&quot;</span><span class="p">:</span> <span class="n">ST3</span><span class="p">}</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../">PSOAP</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search/" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting-started/">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../scripts/">Command-line Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../configuration/">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../models/">Models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../sb2-tutorial/">SB2 Spectral Disentangling Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorial/">Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../orbit/">Orbit Routines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../data/">Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../covariance/">Covariance Routines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../sampling/">Sampling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../reconstruction/">Reconstruction and Diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog/">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../">Documentation overview</a><ul>
+  <li><a href="../../">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2017-2026, PSOAP contributors.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
