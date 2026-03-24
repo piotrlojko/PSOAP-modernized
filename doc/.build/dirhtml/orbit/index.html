@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Orbit Routines &#8212; PSOAP 0.2.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=c8c5a04b"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <link rel="index" title="Index" href="../genindex/" />
+    <link rel="search" title="Search" href="../search/" />
+    <link rel="next" title="Data" href="../data/" />
+    <link rel="prev" title="Tutorial" href="../tutorial/" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="orbit-routines">
+<h1>Orbit Routines<a class="headerlink" href="#orbit-routines" title="Link to this heading">¶</a></h1>
+<p>The <code class="docutils literal notranslate"><span class="pre">psoap.orbit</span></code> module is the backbone for the main PSOAP tasks of computing radial velocities to shift the wavelength vectors. For a description of the various radial velocity orbital models, see <a class="reference internal" href="../models/#models"><span class="std std-ref">Models</span></a>. There is also an additional module included within the PSOAP packaged, <code class="docutils literal notranslate"><span class="pre">psoap.orbit_astrometry</span></code>, which is not used for the main Gaussian process routines, but includes functions for jointly modeling radial velocity measurements and relative astrometric measurements.</p>
+<section id="module-psoap.orbit">
+<span id="psoap-orbit"></span><h2>psoap.orbit<a class="headerlink" href="#module-psoap.orbit" title="Link to this heading">¶</a></h2>
+<p>Orbital conventions derived according to</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}v_{r,1} = K_1 (\cos (\omega_1 + f) + e \cos \omega_1) \\
+v_{r,2} = K_2 (\cos (\omega_2 + f) + e \cos \omega_2)\end{split}\]</div>
+<p>where a positive <span class="math notranslate nohighlight">\(v_r\)</span> indicates a redshifted source and <span class="math notranslate nohighlight">\(\omega_2 = \omega_1 + \pi\)</span>. In an RV-only paper, typically authors report <span class="math notranslate nohighlight">\(\omega = \omega_1\)</span>.</p>
+<p>In general, quantities like <code class="docutils literal notranslate"><span class="pre">vA</span></code>, <code class="docutils literal notranslate"><span class="pre">vB</span></code>, and <code class="docutils literal notranslate"><span class="pre">vC</span></code> refer to radial velocities relative to the heliocentric frame of the earth, i.e., quantities to directly compare to actual radial velocity measurements.</p>
+<p>(Private) quantities like <code class="docutils literal notranslate"><span class="pre">v1</span></code>, <code class="docutils literal notranslate"><span class="pre">v2</span></code>, <code class="docutils literal notranslate"><span class="pre">v1_in</span></code>, and <code class="docutils literal notranslate"><span class="pre">v1_out</span></code> have more subtle meanings—these are generally partial velocities used in the process of constructing <code class="docutils literal notranslate"><span class="pre">vA</span></code>, etc…</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="psoap.orbit.SB1">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">psoap.orbit.</span></span><span class="sig-name descname"><span class="pre">SB1</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">K</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs_dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#SB1"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.SB1" title="Link to this definition">¶</a></dt>
+<dd><p>Orbital model for a single-line spectroscopic binary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>K</strong> (<em>float</em>) – velocity semi-amplitude</p></li>
+<li><p><strong>e</strong> (<em>float</em>) – eccentricity (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>omega</strong> (<em>float</em>) – argument of periastron for the primary star (degrees)</p></li>
+<li><p><strong>P</strong> (<em>float</em>) – period (days)</p></li>
+<li><p><strong>T0</strong> (<em>float</em>) – epoch of periastron (JD)</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – systemic velocity (km/s)</p></li>
+<li><p><strong>obs_dates</strong> (<em>1D np.array</em>) – dates of observation (JD)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit.SB1.get_velocities">
+<span class="sig-name descname"><span class="pre">get_velocities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#SB1.get_velocities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.SB1.get_velocities" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate the velocities of the primary (<code class="docutils literal notranslate"><span class="pre">vA</span></code>) for all dates provided.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">nvels)</span></code> shape array of the primary velocities</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="psoap.orbit.SB2">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">psoap.orbit.</span></span><span class="sig-name descname"><span class="pre">SB2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">K</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs_dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#SB2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.SB2" title="Link to this definition">¶</a></dt>
+<dd><p>Orbital model for a double-line spectroscopic binary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>q</strong> (<em>float</em>) – mass ratio <code class="docutils literal notranslate"><span class="pre">M_B</span> <span class="pre">/</span> <span class="pre">M_A</span></code></p></li>
+<li><p><strong>K</strong> (<em>float</em>) – velocity semi-amplitude</p></li>
+<li><p><strong>e</strong> (<em>float</em>) – eccentricity (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>omega</strong> (<em>float</em>) – argument of periastron for primary star (degrees)</p></li>
+<li><p><strong>P</strong> (<em>float</em>) – period (days)</p></li>
+<li><p><strong>T0</strong> (<em>float</em>) – epoch of periastron (JD)</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – systemic velocity (km/s)</p></li>
+<li><p><strong>obs_dates</strong> (<em>1D np.array</em>) – dates of observation (JD)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit.SB2.get_velocities">
+<span class="sig-name descname"><span class="pre">get_velocities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#SB2.get_velocities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.SB2.get_velocities" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate the velocities of the primary (<code class="docutils literal notranslate"><span class="pre">vA</span></code>) and secondary (<code class="docutils literal notranslate"><span class="pre">vB</span></code>) for all dates provided.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">(2,</span> <span class="pre">nvels)</span></code> shape array of the primary and secondary velocities</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="psoap.orbit.ST1">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">psoap.orbit.</span></span><span class="sig-name descname"><span class="pre">ST1</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">K_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">K_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs_dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#ST1"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.ST1" title="Link to this definition">¶</a></dt>
+<dd><p>Orbital model for a single-line hierarchical spectroscopic triple.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>K_in</strong> (<em>float</em>) – velocity semi-amplitude for inner orbit</p></li>
+<li><p><strong>e_in</strong> (<em>float</em>) – eccentricity for inner orbit (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>omega_in</strong> (<em>float</em>) – argument of periastron for inner orbit (primary star) (degrees)</p></li>
+<li><p><strong>P_in</strong> (<em>float</em>) – inner period (days)</p></li>
+<li><p><strong>T0_in</strong> (<em>float</em>) – epoch of periastron for inner orbit (JD)</p></li>
+<li><p><strong>K_out</strong> (<em>float</em>) – velocity semi-amplitude for outer orbit</p></li>
+<li><p><strong>e_out</strong> (<em>float</em>) – eccentricity for outer orbit (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>omega_out</strong> (<em>float</em>) – argument of periastron for outer orbit (primary stars) (degrees)</p></li>
+<li><p><strong>P_out</strong> (<em>float</em>) – outer period (days)</p></li>
+<li><p><strong>T0_out</strong> (<em>float</em>) – epoch of periastron for outer orbit (JD)</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – systemic velocity (km/s)</p></li>
+<li><p><strong>obs_dates</strong> (<em>1D np.array</em>) – dates of observation (JD)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit.ST1.get_component_velocities">
+<span class="sig-name descname"><span class="pre">get_component_velocities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#ST1.get_component_velocities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.ST1.get_component_velocities" title="Link to this definition">¶</a></dt>
+<dd><p>Routine to grab v1_inner and v1_outer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">nvels)</span></code> shape array of the primary velocities for the outer motion</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit.ST1.get_velocities">
+<span class="sig-name descname"><span class="pre">get_velocities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#ST1.get_velocities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.ST1.get_velocities" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate the velocities of the primary (<code class="docutils literal notranslate"><span class="pre">vA</span></code>) for all dates provided.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">nvels)</span></code> shape array of the primary velocities</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="psoap.orbit.ST2">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">psoap.orbit.</span></span><span class="sig-name descname"><span class="pre">ST2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">K_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">K_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs_dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#ST2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.ST2" title="Link to this definition">¶</a></dt>
+<dd><p>Orbital model for a double-line (inner orbit) hierarchical spectroscopic triple.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>q_in</strong> (<em>float</em>) – mass ratio <code class="docutils literal notranslate"><span class="pre">M_B</span> <span class="pre">/</span> <span class="pre">M_A</span></code></p></li>
+<li><p><strong>K_in</strong> (<em>float</em>) – velocity semi-amplitude for inner orbit</p></li>
+<li><p><strong>e_in</strong> (<em>float</em>) – eccentricity for inner orbit (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>omega_in</strong> (<em>float</em>) – argument of periastron for inner orbit (degrees)</p></li>
+<li><p><strong>P_in</strong> (<em>float</em>) – inner period (days)</p></li>
+<li><p><strong>T0_in</strong> (<em>float</em>) – epoch of periastron for inner orbit (JD)</p></li>
+<li><p><strong>K_out</strong> (<em>float</em>) – velocity semi-amplitude for outer orbit</p></li>
+<li><p><strong>e_out</strong> (<em>float</em>) – eccentricity for outer orbit (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>omega_out</strong> (<em>float</em>) – argument of periastron for outer orbit (degrees)</p></li>
+<li><p><strong>P_out</strong> (<em>float</em>) – outer period (days)</p></li>
+<li><p><strong>T0_out</strong> (<em>float</em>) – epoch of periastron for outer orbit (JD)</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – systemic velocity (km/s)</p></li>
+<li><p><strong>obs_dates</strong> (<em>1D np.array</em>) – dates of observation (JD)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit.ST2.get_component_velocities">
+<span class="sig-name descname"><span class="pre">get_component_velocities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#ST2.get_component_velocities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.ST2.get_component_velocities" title="Link to this definition">¶</a></dt>
+<dd><p>Routine to grab v1_inner and v1_outer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">nvels)</span></code> shape array of the primary velocities for the outer motion</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit.ST2.get_velocities">
+<span class="sig-name descname"><span class="pre">get_velocities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#ST2.get_velocities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.ST2.get_velocities" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate the velocities of the primary (<code class="docutils literal notranslate"><span class="pre">vA</span></code>) and secondary (<code class="docutils literal notranslate"><span class="pre">vB</span></code>) for all dates provided.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">(2,</span> <span class="pre">nvels)</span></code> shape array of the primary and secondary velocities</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="psoap.orbit.ST3">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">psoap.orbit.</span></span><span class="sig-name descname"><span class="pre">ST3</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">K_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">K_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs_dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#ST3"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.ST3" title="Link to this definition">¶</a></dt>
+<dd><p>Orbital model for a double-line (inner orbit) hierarchical spectroscopic triple.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>q_in</strong> (<em>float</em>) – mass ratio <code class="docutils literal notranslate"><span class="pre">M_B</span> <span class="pre">/</span> <span class="pre">M_A</span></code></p></li>
+<li><p><strong>K_in</strong> (<em>float</em>) – velocity semi-amplitude for inner orbit</p></li>
+<li><p><strong>e_in</strong> (<em>float</em>) – eccentricity for inner orbit (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>omega_in</strong> (<em>float</em>) – argument of periastron for inner orbit (degrees)</p></li>
+<li><p><strong>P_in</strong> (<em>float</em>) – inner period (days)</p></li>
+<li><p><strong>T0_in</strong> (<em>float</em>) – epoch of periastron for inner orbit (JD)</p></li>
+<li><p><strong>q_out</strong> (<em>float</em>) – mass ratio <code class="docutils literal notranslate"><span class="pre">M_C</span> <span class="pre">/</span> <span class="pre">(M_A</span> <span class="pre">+</span> <span class="pre">M_B)</span></code></p></li>
+<li><p><strong>K_out</strong> (<em>float</em>) – velocity semi-amplitude for outer orbit</p></li>
+<li><p><strong>e_out</strong> (<em>float</em>) – eccentricity for outer orbit (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>omega_out</strong> (<em>float</em>) – argument of periastron for outer orbit (degrees)</p></li>
+<li><p><strong>P_out</strong> (<em>float</em>) – outer period (days)</p></li>
+<li><p><strong>T0_out</strong> (<em>float</em>) – epoch of periastron for outer orbit (JD)</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – systemic velocity (km/s)</p></li>
+<li><p><strong>obs_dates</strong> (<em>1D np.array</em>) – dates of observation (JD)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit.ST3.get_component_velocities">
+<span class="sig-name descname"><span class="pre">get_component_velocities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#psoap.orbit.ST3.get_component_velocities" title="Link to this definition">¶</a></dt>
+<dd><p>Routine to grab v1_inner and v1_outer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">nvels)</span></code> shape array of the primary velocities for the outer motion</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit.ST3.get_velocities">
+<span class="sig-name descname"><span class="pre">get_velocities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit/#ST3.get_velocities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit.ST3.get_velocities" title="Link to this definition">¶</a></dt>
+<dd><p>Calculate the velocities of the primary (<code class="docutils literal notranslate"><span class="pre">vA</span></code>), secondary (<code class="docutils literal notranslate"><span class="pre">vB</span></code>), and tertiary (<code class="docutils literal notranslate"><span class="pre">vC</span></code>) for all dates provided.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate velocities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">(3,</span> <span class="pre">nvels)</span></code> shape array of the primary, secondary, and tertiary velocities</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.array</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="psoap-orbit-astrometry">
+<h2>psoap.orbit_astrometry<a class="headerlink" href="#psoap-orbit-astrometry" title="Link to this heading">¶</a></h2>
+<p>This is an alternate parameterization suited for joint astrometric and radial velocity orbital modeling.</p>
+<p id="module-psoap.orbit_astrometry">Orbital conventions derived according to</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\Delta \delta = X = \rho \cos \theta \\
+\Delta \alpha \cos \delta = Y = \rho \sin \theta\end{split}\]</div>
+<p>The positive X-axis points North, and the positive Y-axis points East. Rotation angle <span class="math notranslate nohighlight">\(\theta\)</span> is measured in degrees East of North, i.e.</p>
+<div class="math notranslate nohighlight">
+\[\theta = \arctan(Y / X).\]</div>
+<p>In our implementation, we use <code class="docutils literal notranslate"><span class="pre">np.atan2(Y/X)</span></code> to resolve the quadrant ambiguity.</p>
+<p>The <em>ascending node</em> is defined as the point where the <em>secondary</em> crosses the plane of the sky <em>receeding</em> from the observer. It is measured in degrees East of North.</p>
+<p>Inclination is defined such that <span class="math notranslate nohighlight">\(0 &lt; i &lt; \pi/2\)</span> yield prograde orbits (counter-clockwise, such that <span class="math notranslate nohighlight">\(\theta\)</span> increases), and <span class="math notranslate nohighlight">\(\pi/2 &lt; i &lt; \pi\)</span> yield retrograde orbits (clockwise, such that <span class="math notranslate nohighlight">\(\theta\)</span> decreases).</p>
+<p>These lead to the following equations of motion</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}X = r (\cos \Omega \cos(\omega + f) - \sin(\Omega) \sin(\omega + f) \cos(i)) \\
+Y = r (\sin \Omega \cos(\omega + f) + \cos(\Omega) \sin(\omega + f) \cos(i)) \\
+Z = - r \sin(\omega + f) \sin(i)\end{split}\]</div>
+<p>and</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}v_{r,1} = K_1 (\cos (\omega_1 + f) + e \cos \omega_1) \\
+v_{r,2} = K_2 (\cos (\omega_2 + f) + e \cos \omega_2).\end{split}\]</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="psoap.orbit_astrometry.Binary">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">psoap.orbit_astrometry.</span></span><span class="sig-name descname"><span class="pre">Binary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">i</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Omega</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M_tot</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M_2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs_dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit_astrometry/#Binary"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit_astrometry.Binary" title="Link to this definition">¶</a></dt>
+<dd><p>Binary orbital model that can deliver absolute astrometric position,
+relative astrometric position (B relative to A), and radial velocities for A and B.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<em>float</em>) – semi-major axis [AU]</p></li>
+<li><p><strong>e</strong> (<em>float</em>) – eccentricity (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>i</strong> (<em>float</em>) – inclination [deg]</p></li>
+<li><p><strong>omega</strong> (<em>float</em>) – argument of periastron of the <em>primary</em>, i.e. <span class="math notranslate nohighlight">\(\omega_1\)</span> [degrees]</p></li>
+<li><p><strong>Omega</strong> (<em>float</em>) – position angle of the ascending node (going into sky) [deg] east of north</p></li>
+<li><p><strong>T0</strong> (<em>float</em>) – epoch of periastron passage [JD]</p></li>
+<li><p><strong>M_tot</strong> (<em>float</em>) – sum of the masses <span class="math notranslate nohighlight">\(M_\mathrm{A} + M_\mathrm{B}\)</span> [<span class="math notranslate nohighlight">\(M_\odot\)</span>]</p></li>
+<li><p><strong>M_2</strong> (<em>float</em>) – mass of B [<span class="math notranslate nohighlight">\(M_\odot\)</span>]</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – systemic velocity (km/s)</p></li>
+<li><p><strong>obs_dates</strong> (<em>1D np.array</em>) – dates of observation (JD)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit_astrometry.Binary.get_full_orbit">
+<span class="sig-name descname"><span class="pre">get_full_orbit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit_astrometry/#Binary.get_full_orbit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit_astrometry.Binary.get_full_orbit" title="Link to this definition">¶</a></dt>
+<dd><p>Deliver the full set of astrometric and radial velocity quantities, namely
+the radial velocities <code class="docutils literal notranslate"><span class="pre">vA</span></code>, <code class="docutils literal notranslate"><span class="pre">vB</span></code>, the position of A and B relative to the center of mass in the plane of the sky (<code class="docutils literal notranslate"><span class="pre">XY_A</span></code> and <code class="docutils literal notranslate"><span class="pre">XY_B</span></code>, respectively), the position of B relative to the position of A in the plane of the sky (<code class="docutils literal notranslate"><span class="pre">XY_AB</span></code>), the position of A and B in the plane of the orbit (<code class="docutils literal notranslate"><span class="pre">xy_A</span></code> and <code class="docutils literal notranslate"><span class="pre">xy_B</span></code>, respectively), and the position of B relative to the position of A in the plane of the orbit (<code class="docutils literal notranslate"><span class="pre">xy_AB</span></code>), for all dates provided. All positions are given in units of AU, and so must be converted to arcseconds after assuming a distance to the system.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate quantities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A dictionary with items of <code class="docutils literal notranslate"><span class="pre">&quot;vAs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;vBs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;XYZ_As&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;XYZ_Bs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;XYZ_ABs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;xy_As&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;xy_Bs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;xy_ABs&quot;</span></code></p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit_astrometry.Binary.get_orbit">
+<span class="sig-name descname"><span class="pre">get_orbit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit_astrometry/#Binary.get_orbit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit_astrometry.Binary.get_orbit" title="Link to this definition">¶</a></dt>
+<dd><p>Deliver only the main quantities useful for performing a joint astrometric + RV fit to real data, namely
+the radial velocities <code class="docutils literal notranslate"><span class="pre">vA</span></code>, <code class="docutils literal notranslate"><span class="pre">vB</span></code>, the relative offsets <span class="math notranslate nohighlight">\(\rho\)</span>, and relative position angles <span class="math notranslate nohighlight">\(\theta\)</span>, for all dates provided. Relative offsets are provided in AU, and so must be converted to arcseconds after assuming a distance to the system. Relative position angles are given in degrees east of north.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate quantities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A dictionary with items <code class="docutils literal notranslate"><span class="pre">&quot;vAs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;vBs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;rhos&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;thetas&quot;</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="psoap.orbit_astrometry.Triple">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">psoap.orbit_astrometry.</span></span><span class="sig-name descname"><span class="pre">Triple</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">i_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Omega_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">a_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">e_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">i_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">omega_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Omega_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T0_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M_1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M_2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M_3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs_dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit_astrometry/#Triple"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit_astrometry.Triple" title="Link to this definition">¶</a></dt>
+<dd><p>Triple orbital model that can deliver absolute astrometric position, relative astrometric position (B relative to A, and C relative to A), and radial velocities for A, B, and C.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a_in</strong> (<em>float</em>) – semi-major axis for inner orbit [AU]</p></li>
+<li><p><strong>e_in</strong> (<em>float</em>) – eccentricity for inner orbit (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>i_in</strong> (<em>float</em>) – inclination for inner orbit [deg]</p></li>
+<li><p><strong>omega_in</strong> (<em>float</em>) – argument of periastron for inner orbit, for the primary (<span class="math notranslate nohighlight">\(\omega_1\)</span>) [degrees]</p></li>
+<li><p><strong>Omega_in</strong> (<em>float</em>) – position angle of the ascending node [deg] east of north for inner orbit</p></li>
+<li><p><strong>T0_in</strong> (<em>float</em>) – epoch of periastron passage for inner orbit [JD]</p></li>
+<li><p><strong>a_out</strong> (<em>float</em>) – semi-major axis for outer orbit [AU]</p></li>
+<li><p><strong>e_out</strong> (<em>float</em>) – eccentricity for outer orbit (must be between <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0)</span></code>)</p></li>
+<li><p><strong>i_out</strong> (<em>float</em>) – inclination for outer orbit [deg]</p></li>
+<li><p><strong>omega_out</strong> (<em>float</em>) – argument of periastron for outer orbit, for the “primary” (<span class="math notranslate nohighlight">\(\omega_{12}\)</span>) [degrees]</p></li>
+<li><p><strong>Omega_out</strong> (<em>float</em>) – position angle of the ascending node [deg] east of north for outer orbit</p></li>
+<li><p><strong>T0_out</strong> (<em>float</em>) – epoch of periastron passage for outer orbit [JD]</p></li>
+<li><p><strong>M_1</strong> (<em>float</em>) – mass of A [<span class="math notranslate nohighlight">\(M_\odot\)</span>]</p></li>
+<li><p><strong>M_2</strong> (<em>float</em>) – mass of B [<span class="math notranslate nohighlight">\(M_\odot\)</span>]</p></li>
+<li><p><strong>M_3</strong> (<em>float</em>) – mass of C [<span class="math notranslate nohighlight">\(M_\odot\)</span>]</p></li>
+<li><p><strong>gamma</strong> (<em>float</em>) – systemic velocity (km/s)</p></li>
+<li><p><strong>obs_dates</strong> (<em>1D np.array</em>) – dates of observation (JD)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit_astrometry.Triple.get_full_orbit">
+<span class="sig-name descname"><span class="pre">get_full_orbit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit_astrometry/#Triple.get_full_orbit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit_astrometry.Triple.get_full_orbit" title="Link to this definition">¶</a></dt>
+<dd><p>Deliver the full set of astrometric and radial velocity quantities, namely
+the radial velocities <span class="math notranslate nohighlight">\(v_{r,A}\)</span>, <span class="math notranslate nohighlight">\(v_{r,B}\)</span>, <span class="math notranslate nohighlight">\(v_{r,C}\)</span>, the position of A, B, and C relative to the center of mass in the plane of the sky (<code class="docutils literal notranslate"><span class="pre">XYZ_A</span></code>, <code class="docutils literal notranslate"><span class="pre">XYZ_B</span></code>, and <code class="docutils literal notranslate"><span class="pre">XYZ_C</span></code>, respectively), the absolute position of the center of mass of (AB), (<code class="docutils literal notranslate"><span class="pre">XYZ_AB</span></code>), the position of A relative to the center of mass of AB (<code class="docutils literal notranslate"><span class="pre">XYZ_A_loc</span></code>), the position of B relative to the center of mass of (AB) (<code class="docutils literal notranslate"><span class="pre">XYZ_B_loc</span></code>), the absolute position of C in the plane of the orbit (<code class="docutils literal notranslate"><span class="pre">xy_C</span></code>), the absolute positon of the center of mass of AB in the plane of the orbit (<code class="docutils literal notranslate"><span class="pre">xy_AB</span></code>), the position of A in the plane of the orbit, relative to the center of mass of AB (<code class="docutils literal notranslate"><span class="pre">xy_A_locs</span></code>), and the position of B in the plane of the orbit, relative to the center of mass of AB (<code class="docutils literal notranslate"><span class="pre">xy_B_locs</span></code>), for all dates provided. All positions are given in units of AU, and so must be converted to arcseconds after assuming a distance to the system.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate quantities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A dictionary with keys <code class="docutils literal notranslate"><span class="pre">vAs</span></code>, <code class="docutils literal notranslate"><span class="pre">vBs</span></code>, <code class="docutils literal notranslate"><span class="pre">vCs</span></code>, <code class="docutils literal notranslate"><span class="pre">XYZ_As</span></code>, <code class="docutils literal notranslate"><span class="pre">XYZ_Bs</span></code>, <code class="docutils literal notranslate"><span class="pre">XYZ_Cs</span></code>, <code class="docutils literal notranslate"><span class="pre">XYZ_ABs</span></code>, <code class="docutils literal notranslate"><span class="pre">XYZ_A_locs</span></code>, <code class="docutils literal notranslate"><span class="pre">XYZ_B_locs</span></code>, <code class="docutils literal notranslate"><span class="pre">xy_Cs</span></code>, <code class="docutils literal notranslate"><span class="pre">xy_ABs</span></code>, <code class="docutils literal notranslate"><span class="pre">xy_A_locs</span></code>, <code class="docutils literal notranslate"><span class="pre">xy_B_locs</span></code></p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="psoap.orbit_astrometry.Triple.get_orbit">
+<span class="sig-name descname"><span class="pre">get_orbit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/psoap/orbit_astrometry/#Triple.get_orbit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#psoap.orbit_astrometry.Triple.get_orbit" title="Link to this definition">¶</a></dt>
+<dd><p>Deliver only the main quantities useful for performing a joint astrometric + RV fit to real data, namely
+the radial velocities <span class="math notranslate nohighlight">\(v_{r,A}\)</span>, <span class="math notranslate nohighlight">\(v_{r,B}\)</span>, <span class="math notranslate nohighlight">\(v_{r,C}\)</span>, the relative offsets of B to A <span class="math notranslate nohighlight">\(\rho_\mathrm{AB}\)</span>, and relative position angles <span class="math notranslate nohighlight">\(\theta_\mathrm{AB}\)</span>, and the relative offsets of C to A <span class="math notranslate nohighlight">\(\rho_\mathrm{AC}\)</span> and <span class="math notranslate nohighlight">\(\theta_\mathrm{AC}\)</span> for all dates provided. Relative offsets are provided in AU, and so must be converted to arcseconds after assuming a distance to the system. Relative position angles are given in degrees east of north.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dates</strong> (<em>optional</em>) – if provided, calculate quantities at this new vector of dates, rather than the one provided when the object was initialized.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A dictionary with keys <code class="docutils literal notranslate"><span class="pre">&quot;vAs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;vBs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;vCs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;rho_ABs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;theta_ABs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;rho_ACs&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;theta_ACs&quot;</span></code></p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../">PSOAP</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search/" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../scripts/">Command-line Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration/">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../models/">Models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sb2-tutorial/">SB2 Spectral Disentangling Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorial/">Tutorial</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Orbit Routines</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-psoap.orbit">psoap.orbit</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#psoap-orbit-astrometry">psoap.orbit_astrometry</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../data/">Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../covariance/">Covariance Routines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sampling/">Sampling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../reconstruction/">Reconstruction and Diagnostics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../changelog/">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../">Documentation overview</a><ul>
+      <li>Previous: <a href="../tutorial/" title="previous chapter">Tutorial</a></li>
+      <li>Next: <a href="../data/" title="next chapter">Data</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2017-2026, PSOAP contributors.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/orbit.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
