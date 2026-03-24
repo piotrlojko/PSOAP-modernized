@@ -1,63 +1,109 @@
-# PSOAP
+# PSOAP-modernized
 Pronounced "soap."
 
-[![Documentation Status](https://readthedocs.org/projects/psoap/badge/?version=latest)](http://psoap.readthedocs.io/en/latest/?badge=latest) [![Build Status](https://travis-ci.org/iancze/PSOAP.svg?branch=master)](https://travis-ci.org/iancze/PSOAP)
+[![Documentation Status](https://readthedocs.org/projects/psoap/badge/?version=latest)](https://psoap.readthedocs.io/en/latest/?badge=latest)
 
 **Precision Spectroscopic Orbits A-Parametrically**
 
-PSOAP is a package for simultaneously inferring stellar (and/or exoplanet) orbits and stellar spectra using Gaussian processes. Some uses include:
+PSOAP-modernized is a Python package for jointly inferring orbital parameters and component spectra from time-series spectroscopy using Gaussian processes.
 
-* Fitting for radial velocities in a template-free manner
-* Inferring orbits of single-lined spectroscopic binaries (e.g., exoplanets/their host stars)
-* Generation of high-fidelity stellar templates (for use with traditional RV cross-correlation measurements, variability searches)
-* Inferring orbits and spectra of double-lined spectroscopic binaries (see gif below)
+Supported production workflows in this repository are:
 
-Documentation and installation instructi
-ons are available at [http://psoap.readthedocs.io](http://psoap.readthedocs.io).
+- `SB2` — double-lined spectroscopic binaries
+- `ST2` — hierarchical triples with two visible components
+- `ST3` — hierarchical triples with three visible components
+
+## Installation
+
+PSOAP-modernized targets Python 3.12+.
+
+```bash
+git clone https://github.com/piotrlojko/PSOAP-modernized.git
+cd PSOAP-modernized
+python -m pip install -e .
+python setup.py build_ext --inplace
+```
+
+The single-core sampler uses `emcee`; install it if your environment did not bring it in automatically:
+
+```bash
+python -m pip install emcee
+```
+
+Sanity check your install:
+
+```bash
+psoap-initialize --check
+```
 
 ## Quick start (SB2)
 
+1. Create a new empty working directory for your run.
+2. Initialize a configuration template:
+
 ```bash
-# Install in development mode
-pip install -e .
-python setup.py build_ext --inplace
-
-# Initialize a new SB2 project
 psoap-initialize --model SB2
-
-# Edit config.yaml, then run sampling
-psoap-sample
-
-# Plot posterior summaries and RV results
-psoap-plot-samples
 ```
 
-![disentangling loop](output.gif "disentangling loop")
+3. Create `spectra_list.txt` with two whitespace-separated columns:
 
-If you use our paper, code, or a derivative of it in your research, we would really appreciate a citation to [Czekala et al. 2017](http://adsabs.harvard.edu/abs/2017ApJ...840...49C):
+```text
+filename date
+/path/to/epoch_001.txt 2459001.1234
+/path/to/epoch_002.txt 2459004.5678
+```
 
-    @ARTICLE{2017ApJ...840...49C,
-        author = {{Czekala}, I. and {Mandel}, K.~S. and {Andrews}, S.~M. and {Dittmann}, J.~A. and
-        {Ghosh}, S.~K. and {Montet}, B.~T. and {Newton}, E.~R.},
-        title = "{Disentangling Time-series Spectra with Gaussian Processes: Applications to Radial Velocity Analysis}",
-        journal = {\apj},
-        archivePrefix = "arXiv",
-        eprint = {1702.05652},
-        primaryClass = "astro-ph.SR",
-        keywords = {binaries: spectroscopic, celestial mechanics, stars: fundamental parameters, stars: individual: LP661-13, techniques: radial velocities, techniques: spectroscopic},
-         year = 2017,
-        month = may,
-        volume = 840,
-          eid = {49},
-        pages = {49},
-          doi = {10.3847/1538-4357/aa6aab},
-        adsurl = {http://adsabs.harvard.edu/abs/2017ApJ...840...49C},
-        adsnote = {Provided by the SAO/NASA Astrophysics Data System}
-    }
+4. Each spectrum file must contain 3 columns:
 
-Copyright Ian Czekala and collaborators 2016-17.
+```text
+wavelength_Angstrom flux sigma
+5265.0001 0.9982 0.0100
+5265.0214 1.0031 0.0101
+...
+```
 
-## Papers using PSOAP
+5. Edit `config.yaml` (copied in step 2) so that model parameters and file paths match your dataset.
+6. Run MCMC:
 
-* *Disentangling Time-series Spectra with Gaussian Processes: Applications to Radial Velocity Analysis*, [Czekala et al. 2017](http://adsabs.harvard.edu/abs/2017ApJ...840...49C)
-* *The Architecture of the GW Ori Young Triple Star System and Its Disk: Dynamical Masses, Mutual Inclinations, and Recurrent Eclipses*, [Czekala et al. 2017](http://adsabs.harvard.edu/abs/2017arXiv171003153C)
+```bash
+psoap-sample
+```
+
+Or for chunked parallel likelihood evaluation:
+
+```bash
+psoap-sample-parallel 0
+```
+
+7. In the selected output run directory (for example `output/run00/`), summarize chains:
+
+```bash
+cd output/run00
+psoap-plot-samples --burn 200
+```
+
+## Documentation
+
+- ReadTheDocs: <https://psoap.readthedocs.io>
+- Local Sphinx sources: `/home/runner/work/PSOAP-modernized/PSOAP-modernized/doc`
+
+Build docs locally:
+
+```bash
+cd doc
+make dirhtml
+```
+
+## Tests
+
+From the repository root:
+
+```bash
+pytest
+```
+
+## Citation
+
+If you use PSOAP in scientific work, please cite:
+
+*Czekala et al. 2017, ApJ, 840, 49* — <http://adsabs.harvard.edu/abs/2017ApJ...840...49C>

@@ -1,26 +1,41 @@
-====
 Data
 ====
 
-Data formats
-------------
+PSOAP loads per-epoch spectra from plain-text files through :mod:`psoap.data`.
 
-PSOAP relies upon chunks of data. When working with real data, there are a few things to keep in mind.
+Expected input format
+---------------------
 
-First, it may so happen that certain pixels may need to be masked, for example due to cosmic ray hits. This means that actual data chunks will probably have an un-equal number of pixels per epoch. This is OK.
+A run is defined by ``spectra_list`` (set in ``config.yaml``), containing two
+columns:
 
-So, all chunks will be generated with their full complement of data, but when executing any inference routines, the masks will be applied to the data.
+* ``filename``: path to spectrum text file
+* ``date``: observation date (JD)
 
-All data and chunks are stored in an HDF5 format.
+Each spectrum file must have 3 columns:
 
-Data module
------------
+1. wavelength [Angstrom]
+2. normalized flux
+3. sigma
+
+Data handling details
+---------------------
+
+:class:`psoap.data.Chunk` is the core container. ``Chunk.from_textfiles``:
+
+* reads all epochs
+* interpolates onto a common wavelength grid (from first epoch)
+* supports optional ``wl_min`` / ``wl_max`` clipping
+* stores arrays for wavelength, flux, sigma, and epoch dates
+
+Masking is applied with :meth:`psoap.data.Chunk.apply_mask` before likelihood
+calls.
+
+API reference
+-------------
 
 .. automodule:: psoap.data
     :members:
-
-Utils module
-------------
 
 .. automodule:: psoap.utils
     :members:
