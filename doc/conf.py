@@ -49,10 +49,13 @@ pygments_style = 'sphinx'
 todo_include_todos = False
 
 
-# taken from https://github.com/dfm/celerite/blob/master/docs/conf.py
-# Readthedocs.
-import sphinx_rtd_theme
-html_theme = "sphinx_rtd_theme"
+# Prefer Read the Docs theme when available, but don't hard-fail docs builds.
+try:
+    import sphinx_rtd_theme  # noqa: F401
+except ImportError:
+    html_theme = "alabaster"
+else:
+    html_theme = "sphinx_rtd_theme"
 
 html_context = dict(
     display_github=True,
