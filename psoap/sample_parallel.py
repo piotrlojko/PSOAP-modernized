@@ -17,10 +17,13 @@ from multiprocessing import Process, Pipe
 
 import yaml
 import numpy as np
-from astropy.io import ascii
 
 import psoap.constants as C
 from psoap.data import Chunk, lredshift, replicate_wls
+from psoap.input_parsing import (
+    parse_spectra_list,
+    print_and_log_model_config,
+)
 from psoap import utils
 from psoap import orbit
 from psoap import covariance
@@ -47,6 +50,7 @@ def main():
     args = parser.parse_args()
 
     config = _load_config()
+    print_and_log_model_config(config)
     pars = config["parameters"]
     model = config["model"]
 
@@ -66,9 +70,7 @@ def main():
             filemode="w", datefmt="%m/%d/%Y %I:%M:%S %p")
 
     # ----- load data -----
-    spectra_table = ascii.read(config["spectra_list"])
-    filenames = list(spectra_table["filename"])
-    dates = np.array(spectra_table["date"])
+    filenames, dates = parse_spectra_list(config["spectra_list"])
 
     wl_ranges = config.get("wl_ranges", [None])  # list of (wl_min, wl_max) dicts
     n_chunks = len(wl_ranges)
