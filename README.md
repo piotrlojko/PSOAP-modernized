@@ -92,7 +92,10 @@ Build docs locally:
 ```bash
 cd doc
 make dirhtml
+cd .build/dirhtml
+python -m http.server
 ```
+and open the generated link in a web browser to see the contents of the documentation.
 
 ## Tests
 
