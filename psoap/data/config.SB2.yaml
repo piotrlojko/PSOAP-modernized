@@ -71,3 +71,31 @@ opt_jump: opt_jump.npy
 
 # Output directory
 outdir: output
+
+# ---------------------------------------------------------------------------
+# Automatic wavelength chunking (optional).
+# When enabled, PSOAP inspects the loaded spectra and available system memory
+# to automatically split the wavelength range into sub-chunks such that each
+# worker's dense N×N covariance matrix fits in RAM.  Leave disabled (or omit
+# this section entirely) to use the existing wl_ranges list instead.
+# ---------------------------------------------------------------------------
+# auto_chunk:
+#   enabled: false        # set to true to activate automatic chunking
+#   memory_fraction: 0.25 # fraction of available RAM to budget per worker
+#   safety_factor: 4.0    # multiplier on raw N² memory estimate (headroom)
+#   max_chunks: ~         # hard cap on number of chunks (null = no cap)
+#   max_wallclock_hours: 48.0  # abort if estimated runtime exceeds this
+
+# ---------------------------------------------------------------------------
+# Spectral resolution degradation (optional preprocessing).
+# When enabled, each loaded chunk is linearly interpolated onto a sparser
+# wavelength grid before GP fitting.  This reduces N and therefore both the
+# memory footprint and the compute cost.  Use this when auto-chunking alone
+# cannot reduce chunk sizes to a manageable level.
+# Provide exactly one of target_step or factor.
+# ---------------------------------------------------------------------------
+# resolution_degrade:
+#   enabled: false           # set to true to activate degradation
+#   target_step: ~           # target uniform wavelength spacing [Angstroms]
+#   factor: ~                # integer down-sampling factor (keep every k-th point)
+#   apply_before_chunking: true  # degrade before auto-chunk planning
