@@ -49,7 +49,7 @@ psoap-initialize --check
 psoap-initialize --model SB2
 ```
 
-3. Create `spectra_list.txt` with two whitespace-separated columns:
+3. Create `spectra_list.txt` with two whitespace-separated columns and a single-line header:
 
 ```text
 filename date
@@ -57,7 +57,7 @@ filename date
 /path/to/epoch_002.txt 2459004.5678
 ```
 
-4. Each spectrum file must contain 3 columns:
+4. Each spectrum file should contain 3 columns and a single-line header:
 
 ```text
 wavelength_Angstrom flux sigma
