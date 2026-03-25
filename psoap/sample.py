@@ -14,11 +14,14 @@ import logging
 from functools import partial
 
 import numpy as np
-from astropy.io import ascii
 import emcee
 
 import psoap.constants as C
 from psoap.data import Chunk, lredshift, replicate_wls
+from psoap.input_parsing import (
+    parse_spectra_list,
+    print_and_log_model_config,
+)
 from psoap import utils
 from psoap import orbit
 from psoap import covariance
@@ -76,6 +79,7 @@ def main():
     args = parser.parse_args()
 
     config = _load_config()
+    print_and_log_model_config(config)
     pars = config["parameters"]
     model = config["model"]
 
@@ -95,10 +99,9 @@ def main():
             filemode="w", datefmt="%m/%d/%Y %I:%M:%S %p")
 
     # ----- load data -----
-    filenames = ascii.read(config["spectra_list"])["filename"]
-    dates = ascii.read(config["spectra_list"])["date"]
+    filenames, dates = parse_spectra_list(config["spectra_list"])
     data = Chunk.from_textfiles(
-        list(filenames), dates,
+        filenames, dates,
         limit=config.get("epoch_limit"),
         wl_min=config.get("wl_min"),
         wl_max=config.get("wl_max"),

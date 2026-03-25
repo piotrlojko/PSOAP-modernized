@@ -3,6 +3,7 @@ import numpy as np
 
 import psoap
 from psoap import constants as C
+from psoap.input_parsing import load_spectrum_array
 
 
 def compute_barycentric_corrections(dates, ra, dec):
@@ -203,7 +204,7 @@ class Chunk:
         n_epochs = len(filenames)
 
         # Load first spectrum to determine pixel grid
-        spec0 = np.loadtxt(filenames[0])
+        spec0 = load_spectrum_array(filenames[0])
         wl_ref = spec0[:, 0].astype(np.float64)
         mask_cut = np.ones(len(wl_ref), dtype=bool)
         if wl_min is not None:
@@ -218,7 +219,7 @@ class Chunk:
         sigma_arr = np.empty((n_epochs, n_pix), dtype=np.float64)
 
         for i, fname in enumerate(filenames):
-            spec = np.loadtxt(fname)
+            spec = load_spectrum_array(fname)
             wl_i = spec[:, 0].astype(np.float64)
             fl_i = spec[:, 1].astype(np.float64)
             sigma_i = spec[:, 2].astype(np.float64)
