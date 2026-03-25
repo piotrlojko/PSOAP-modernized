@@ -27,6 +27,24 @@ def _warn(message):
 
 
 def parse_spectra_list(path):
+    """
+    Parse a spectra-list text file into filename/date arrays.
+
+    The expected header is a single uncommented line exactly equal to
+    ``filename date``. If that header is missing, this parser warns and falls
+    back to positional parsing of two whitespace-separated columns.
+
+    Args:
+        path (str): Path to the spectra list file.
+
+    Returns:
+        tuple: ``(filenames, dates)`` where ``filenames`` is a ``list[str]``
+        and ``dates`` is a float64 NumPy array.
+
+    Raises:
+        RuntimeError: If the file is empty, has bad column counts, or has date
+        values that cannot be converted to float.
+    """
     rows = list(_iter_noncomment_lines(path))
     if not rows:
         raise RuntimeError(
@@ -77,6 +95,25 @@ def parse_spectra_list(path):
 
 
 def load_spectrum_array(path):
+    """
+    Parse a single 3-column spectrum text file into a float array.
+
+    The expected header is a single uncommented line exactly equal to
+    ``wavelength_Angstrom flux flux_err``. If that header is missing, this
+    parser warns and falls back to positional parsing of three
+    whitespace-separated numeric columns.
+
+    Args:
+        path (str): Path to the spectrum file.
+
+    Returns:
+        np.ndarray: Float64 array with shape ``(n_rows, 3)`` ordered as
+        wavelength [Angstrom], normalized flux, and flux error.
+
+    Raises:
+        RuntimeError: If the file is empty, has bad column counts, or contains
+        non-numeric values in data rows.
+    """
     rows = list(_iter_noncomment_lines(path))
     if not rows:
         raise RuntimeError(
@@ -125,6 +162,15 @@ def load_spectrum_array(path):
 
 
 def render_model_config(config):
+    """
+    Render the current sampler configuration as a readable multiline string.
+
+    Args:
+        config (dict): Parsed ``config.yaml`` mapping.
+
+    Returns:
+        str: Formatted text containing the model name and YAML representation.
+    """
     model = config.get("model", "<unknown>")
     body = yaml.safe_dump(config, sort_keys=False, default_flow_style=False).strip()
     return "\nCurrent model configuration ({})\n{}\n{}\n".format(
@@ -133,6 +179,12 @@ def render_model_config(config):
 
 
 def print_and_log_model_config(config):
+    """
+    Print and log the current model configuration.
+
+    Args:
+        config (dict): Parsed ``config.yaml`` mapping for the active run.
+    """
     text = render_model_config(config)
     print(text)
     logging.info("\n%s", text)
