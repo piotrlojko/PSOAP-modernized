@@ -14,6 +14,14 @@ model: ST3
 epoch_limit: ~
 soften: 1.0
 
+# Barycentric velocity correction.  Set to true if spectra are already
+# corrected; set to false to apply the correction automatically.
+# When barycentric_corrected is false, target_ra and target_dec (ICRS,
+# decimal degrees) are required.
+barycentric_corrected: true
+# target_ra: 83.822
+# target_dec: -5.391
+
 parameters:
   q_in: 0.4       # mass ratio of inner pair q_in = M_B / M_A
   K_in: 10.0      # semi-amplitude of inner primary [km/s]

@@ -84,6 +84,16 @@ def main():
             wl_min=wl_min,
             wl_max=wl_max,
         )
+
+        # Optionally apply barycentric velocity correction as a preprocessing step
+        if not config.get("barycentric_corrected", True):
+            from psoap.data import compute_barycentric_corrections
+            ra = config["target_ra"]
+            dec = config["target_dec"]
+            v_bary = compute_barycentric_corrections(chunkSpec.date1D, ra, dec)
+            print("Applying barycentric corrections (km/s):", v_bary)
+            chunkSpec.apply_barycentric_correction(v_bary)
+
         chunkSpec.apply_mask()
         chunk_data.append(chunkSpec)
 

@@ -5,6 +5,45 @@ import psoap
 from psoap import constants as C
 
 
+def compute_barycentric_corrections(dates, ra, dec):
+    '''
+    Compute the barycentric radial-velocity correction for each observation.
+
+    The correction accounts for the motion of the Earth (geocenter) relative
+    to the Solar System barycenter, projected along the line of sight to the
+    target.  The observatory's exact location on the Earth is *not* taken into
+    account (geocentric approximation).
+
+    Args:
+        dates (array-like): Barycentric Julian Dates (BJD_TDB) of each
+            observation.
+        ra (float): Right Ascension of the target in decimal degrees (ICRS).
+        dec (float): Declination of the target in decimal degrees (ICRS).
+
+    Returns:
+        np.ndarray: Array of velocity corrections in km/s, one per epoch.
+            Adding this value to a measured radial velocity converts it from
+            the geocentric to the barycentric frame.  The same correction is
+            applied as a wavelength *red*-shift when moving observed spectra
+            to the barycentric frame.
+    '''
+    from astropy.coordinates import SkyCoord, EarthLocation
+    from astropy.time import Time
+    import astropy.units as u
+
+    sc = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs')
+    times = Time(np.atleast_1d(dates), format='jd', scale='tdb')
+    # Use a geodetic location at zero longitude/latitude with zero elevation so
+    # that only the Earth's bulk orbital motion is captured and no observatory-
+    # specific correction is applied (per the geocentric approximation).
+    location = EarthLocation.from_geodetic(lon=0 * u.deg, lat=0 * u.deg,
+                                           height=0 * u.m)
+    corrections = sc.radial_velocity_correction(
+        kind='barycentric', obstime=times, location=location
+    )
+    return corrections.to(u.km / u.s).value
+
+
 def redshift(wl, v):
     '''
     Redshift a vector of wavelengths. A positive velocity corresponds to a
@@ -99,6 +138,27 @@ class Chunk:
         else:
             self.mask = mask
         self.n_epochs, self.n_pix = self.wl.shape
+
+    def apply_barycentric_correction(self, v_bary):
+        '''
+        Shift each epoch's wavelengths to the barycentric rest frame.
+
+        This is a *preprocessing* step that should be called before
+        :meth:`apply_mask`.  After the correction the stored wavelengths
+        represent the target's frame shifted only by the orbital motion, not
+        by the Earth's annual motion.
+
+        Args:
+            v_bary (array-like of float, length ``n_epochs``): Barycentric
+                velocity correction in km/s for each epoch (as returned by
+                :func:`compute_barycentric_corrections`).  A positive value
+                means the Earth is moving towards the target, so the observed
+                wavelengths are blue-shifted and must be red-shifted back.
+        '''
+        v_bary = np.asarray(v_bary)
+        for i in range(self.n_epochs):
+            self.wl[i] = redshift(self.wl[i], v_bary[i])
+            self.lwl[i] = lredshift(self.lwl[i], v_bary[i])
 
     def apply_mask(self):
         '''
