@@ -3,7 +3,7 @@
 
 # Text file with two columns: "filename" and "date"
 # filename: path to a 3-column text file (wl[AA], flux, sigma)
-# date: observation date (JD)
+# date: observation date (BJD_TDB)
 spectra_list: spectra_list.txt
 
 # SB2 model (double-lined)
@@ -18,6 +18,16 @@ epoch_limit: ~
 
 # Noise softening factor applied to sigma before GP fitting
 soften: 1.0
+
+# Barycentric velocity correction (Earth's motion relative to Solar System
+# barycenter).  Set to true if the input spectra are already corrected for
+# this effect; set to false to have PSOAP compute and apply the correction
+# automatically as a preprocessing step.
+# When barycentric_corrected is false, target_ra and target_dec (ICRS,
+# decimal degrees) are required.
+barycentric_corrected: true
+# target_ra: 26.021   # Right Ascension [degrees], e.g. Tau Ceti
+# target_dec: -15.939  # Declination [degrees]
 
 # Orbital and GP starting parameters
 parameters:
