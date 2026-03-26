@@ -172,6 +172,66 @@ class Chunk:
         self.date = self.date[self.mask]
         self.N = len(self.wl)
 
+    def crop_wavelength_range(self, wl_min=None, wl_max=None):
+        '''
+        Return a new Chunk restricted to a wavelength window.
+
+        This method is intended for preprocessing after any per-epoch
+        wavelength shifts (e.g., barycentric correction).  It constructs a
+        reference wavelength grid from epoch 0 within the requested range and
+        interpolates each epoch onto that common grid.
+
+        Args:
+            wl_min (float, optional): minimum wavelength to keep [Angstroms].
+            wl_max (float, optional): maximum wavelength to keep [Angstroms].
+
+        Returns:
+            Chunk: new chunk object containing only the requested range.
+
+        Raises:
+            RuntimeError: if no pixels fall inside the requested range.
+        '''
+        from scipy.interpolate import interp1d
+
+        if wl_min is None and wl_max is None:
+            return self
+
+        wl_ref = self.wl[0].astype(np.float64)
+        mask_cut = np.ones(len(wl_ref), dtype=bool)
+        if wl_min is not None:
+            mask_cut &= wl_ref >= wl_min
+        if wl_max is not None:
+            mask_cut &= wl_ref <= wl_max
+
+        if not np.any(mask_cut):
+            raise RuntimeError(
+                "No pixels found in the wavelength range [{:.2f}, {:.2f}] Å.".format(
+                    float(wl_min) if wl_min is not None else float(wl_ref[0]),
+                    float(wl_max) if wl_max is not None else float(wl_ref[-1]),
+                )
+            )
+
+        wl_target = wl_ref[mask_cut]
+        n_epochs = self.n_epochs
+        n_pix = len(wl_target)
+
+        wl_arr = np.empty((n_epochs, n_pix), dtype=np.float64)
+        fl_arr = np.empty((n_epochs, n_pix), dtype=np.float64)
+        sigma_arr = np.empty((n_epochs, n_pix), dtype=np.float64)
+
+        for i in range(n_epochs):
+            f_fl = interp1d(self.wl[i], self.fl[i], bounds_error=False, fill_value=1.0)
+            f_sig = interp1d(
+                self.wl[i], self.sigma[i], bounds_error=False, fill_value=np.inf
+            )
+            wl_arr[i] = wl_target
+            fl_arr[i] = f_fl(wl_target)
+            sigma_arr[i] = f_sig(wl_target)
+
+        date_arr = self.date1D[:, np.newaxis] * np.ones((n_epochs, n_pix))
+        mask_new = np.isfinite(sigma_arr)
+        return Chunk(wl_arr, fl_arr, sigma_arr, date_arr, mask=mask_new)
+
     @classmethod
     def from_textfiles(cls, filenames, dates, limit=None, wl_min=None, wl_max=None):
         '''

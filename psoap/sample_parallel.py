@@ -28,8 +28,7 @@ from psoap import utils
 from psoap import orbit
 from psoap import covariance
 from psoap.samplers import StateSampler
-from psoap.chunk_planner import plan_chunks
-from psoap.resolution_degrade import degrade_resolution
+from psoap.preprocessing import build_preprocessed_chunks
 
 
 def _load_config():
@@ -71,87 +70,12 @@ def main():
             filename="{}log.log".format(routdir), level=logging.DEBUG,
             filemode="w", datefmt="%m/%d/%Y %I:%M:%S %p")
 
-    # ----- load data -----
-    filenames, dates = parse_spectra_list(config["spectra_list"])
-
-    epoch_limit = config.get("epoch_limit")
-    if epoch_limit is not None:
-        filenames = list(filenames)[:epoch_limit]
-        dates = np.asarray(dates)[:epoch_limit]
-    n_epochs = len(filenames)
-
-    # ----- optional resolution degradation config -----
-    degrade_cfg = config.get("resolution_degrade") or {}
-    do_degrade = bool(degrade_cfg.get("enabled", False))
-    degrade_target_step = degrade_cfg.get("target_step")
-    degrade_factor = degrade_cfg.get("factor")
-    degrade_before_chunking = bool(degrade_cfg.get("apply_before_chunking", True))
-
-    # ----- auto-chunking -----
-    auto_chunk_cfg = config.get("auto_chunk") or {}
-    do_auto_chunk = bool(auto_chunk_cfg.get("enabled", False))
-
-    if do_auto_chunk:
-        # Load the first spectrum to determine the reference wavelength grid.
-        from psoap.input_parsing import load_spectrum_array
-        spec0 = load_spectrum_array(filenames[0])
-        wl_ref = spec0[:, 0].astype(np.float64)
-
-        # If degradation will be applied before chunking, compute what the
-        # degraded reference grid looks like so the planner uses accurate pixel
-        # counts.
-        if do_degrade and degrade_before_chunking:
-            from psoap.resolution_degrade import degrade_wl_grid
-            wl_ref = degrade_wl_grid(
-                wl_ref,
-                target_step=degrade_target_step,
-                factor=degrade_factor,
-            )
-
-        wl_ranges = plan_chunks(
-            wl_ref=wl_ref,
-            wl_min=config.get("wl_min"),
-            wl_max=config.get("wl_max"),
-            n_epochs=n_epochs,
-            n_samples=config.get("samples", 1000),
-            **auto_chunk_cfg,
-        )
-    else:
-        wl_ranges = config.get("wl_ranges", [None])
-
-    n_chunks = len(wl_ranges)
+    # ----- load and preprocess data -----
+    chunk_data = build_preprocessed_chunks(config)
+    n_chunks = len(chunk_data)
     chunk_keys = np.arange(n_chunks)
-
-    chunk_data = []
-    for wl_range in wl_ranges:
-        wl_min = wl_range.get("wl_min") if isinstance(wl_range, dict) else None
-        wl_max = wl_range.get("wl_max") if isinstance(wl_range, dict) else None
-        chunkSpec = Chunk.from_textfiles(
-            filenames, dates,
-            limit=None,  # epoch_limit already applied to filenames/dates above
-            wl_min=wl_min,
-            wl_max=wl_max,
-        )
-
-        # Optionally apply barycentric velocity correction as a preprocessing step
-        if not config.get("barycentric_corrected", True):
-            from psoap.data import compute_barycentric_corrections
-            ra = config["target_ra"]
-            dec = config["target_dec"]
-            v_bary = compute_barycentric_corrections(chunkSpec.date1D, ra, dec)
-            print("Applying barycentric corrections (km/s):", v_bary)
-            chunkSpec.apply_barycentric_correction(v_bary)
-
-        # Optionally degrade spectral resolution before applying the mask
-        if do_degrade:
-            chunkSpec = degrade_resolution(
-                chunkSpec,
-                target_step=degrade_target_step,
-                factor=degrade_factor,
-            )
-
+    for chunkSpec in chunk_data:
         chunkSpec.apply_mask()
-        chunk_data.append(chunkSpec)
 
     # ----- create convert_vector partial -----
     convert_vector_p = partial(
