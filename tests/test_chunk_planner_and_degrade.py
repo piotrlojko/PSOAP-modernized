@@ -239,14 +239,20 @@ class TestConfigBackwardCompatibility:
     """New config keys must be absent from old configs without errors."""
 
     def test_old_config_no_auto_chunk_key(self):
-        """Configs without 'auto_chunk' must still work (default = disabled)."""
+        """Configs without 'auto_chunk' must still work (planner uses defaults)."""
         config = {
             "model": "SB2",
             "spectra_list": "spectra_list.txt",
             "parameters": {"q": 0.2},
         }
-        auto_chunk_cfg = config.get("auto_chunk") or {}
-        assert bool(auto_chunk_cfg.get("enabled", False)) is False
+        auto_chunk_cfg = dict(config.get("auto_chunk") or {})
+        auto_chunk_cfg.pop("enabled", None)
+        chunks = plan_chunks(
+            wl_ref=np.linspace(5000, 5010, 100),
+            n_epochs=2,
+            **auto_chunk_cfg,
+        )
+        assert len(chunks) >= 1
 
     def test_old_config_no_resolution_degrade_key(self):
         config = {"model": "SB2"}
@@ -256,7 +262,6 @@ class TestConfigBackwardCompatibility:
     def test_auto_chunk_enabled_flag_parsed(self):
         config = {"auto_chunk": {"enabled": True, "memory_fraction": 0.3}}
         auto_chunk_cfg = config.get("auto_chunk") or {}
-        assert bool(auto_chunk_cfg.get("enabled", False)) is True
         assert auto_chunk_cfg.get("memory_fraction") == 0.3
 
     def test_resolution_degrade_factor_parsed(self):

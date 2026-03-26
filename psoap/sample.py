@@ -17,14 +17,14 @@ import numpy as np
 import emcee
 
 import psoap.constants as C
-from psoap.data import Chunk, lredshift, replicate_wls
+from psoap.data import replicate_wls
 from psoap.input_parsing import (
-    parse_spectra_list,
     print_and_log_model_config,
 )
 from psoap import utils
 from psoap import orbit
 from psoap import covariance
+from psoap.preprocessing import build_preprocessed_chunks
 
 
 def _load_config():
@@ -98,33 +98,17 @@ def main():
             filename="{}log.log".format(routdir), level=logging.DEBUG,
             filemode="w", datefmt="%m/%d/%Y %I:%M:%S %p")
 
-    # ----- load data -----
-    filenames, dates = parse_spectra_list(config["spectra_list"])
-    data = Chunk.from_textfiles(
-        filenames, dates,
-        limit=config.get("epoch_limit"),
-        wl_min=config.get("wl_min"),
-        wl_max=config.get("wl_max"),
-    )
+    # ----- load and preprocess data -----
+    chunk_data = build_preprocessed_chunks(config)
+    for data in chunk_data:
+        data.apply_mask()
 
-    # Optionally apply barycentric velocity correction as a preprocessing step
-    if not config.get("barycentric_corrected", True):
-        from psoap.data import compute_barycentric_corrections
-        ra = config["target_ra"]
-        dec = config["target_dec"]
-        v_bary = compute_barycentric_corrections(data.date1D, ra, dec)
-        print("Applying barycentric corrections (km/s):", v_bary)
-        data.apply_barycentric_correction(v_bary)
-
-    data.apply_mask()
-
-    lwl = data.lwl
-    fl = data.fl
-    sigma = data.sigma * config.get("soften", 1.0)
-    mask = data.mask
-    date1D = data.date1D
-    N = data.N
-    V11 = np.empty((N, N), dtype=np.float64)
+    lwls = [data.lwl for data in chunk_data]
+    fls = [data.fl for data in chunk_data]
+    sigmas = [data.sigma * config.get("soften", 1.0) for data in chunk_data]
+    masks = [data.mask for data in chunk_data]
+    dates = [data.date1D for data in chunk_data]
+    V11s = [np.empty((data.N, data.N), dtype=np.float64) for data in chunk_data]
 
     convert_vector_p = partial(
         utils.convert_vector, model=model,
@@ -146,13 +130,14 @@ def main():
             return -np.inf
 
         p_orb, p_GP = convert_vector_p(p)
-        velocities = orbit.models[model](*p_orb, date1D).get_velocities()
-
+        velocities = orbit.models[model](*p_orb, dates[0]).get_velocities()
         if np.any(np.abs(np.array(velocities)) >= C.c_kms):
             return -np.inf
 
-        lwls = replicate_wls(lwl, velocities, mask)
-        lnp = covariance.lnlike[model](V11, *lwls, fl, sigma, *p_GP)
+        lnp = 0.0
+        for lwl, fl, sigma, mask, V11 in zip(lwls, fls, sigmas, masks, V11s):
+            shifted = replicate_wls(lwl, velocities, mask)
+            lnp += covariance.lnlike[model](V11, *shifted, fl, sigma, *p_GP)
         gc.collect()
         return lnp + lnprior
 

@@ -19,9 +19,8 @@ import yaml
 import numpy as np
 
 import psoap.constants as C
-from psoap.data import Chunk, lredshift, replicate_wls
+from psoap.data import replicate_wls
 from psoap.input_parsing import (
-    parse_spectra_list,
     print_and_log_model_config,
 )
 from psoap import utils
