@@ -10,7 +10,6 @@ the log-likelihood for each chunk is evaluated in a dedicated child process.
 import argparse
 import os
 import shutil
-import gc
 import logging
 from functools import partial
 from multiprocessing import Process, Pipe
@@ -143,14 +142,12 @@ def main():
                     "{} {}".format(self.__class__.__name__, key))
                 self.logger.info("Initializing chunk {}.".format(key))
 
-        def lnprob(self, p):
-            p_orb, p_GP = convert_vector_p(p)
-            velocities = orbit.models[model](*p_orb, self.date1D).get_velocities()
-            if np.any(np.abs(np.array(velocities)) >= C.c_kms):
-                return -np.inf
+        def lnprob(self, payload):
+            velocities, p_GP = payload
             lwls = replicate_wls(self.lwl, velocities, self.mask)
-            lnp = covariance.lnlike[model](self.V11, *lwls, self.fl, self.sigma, *p_GP)
-            gc.collect()
+            lnp = covariance.lnlike[model](
+                self.V11, *lwls, self.fl, self.sigma, *p_GP
+            )
             return lnp
 
         def finish(self, *args):
@@ -193,8 +190,13 @@ def main():
         lnprior = prior(p)
         if not np.isfinite(lnprior):
             return -np.inf
+        p_orb, p_GP = convert_vector_p(p)
+        velocities = orbit.models[model](*p_orb, chunk_data[0].date1D).get_velocities()
+        if np.any(np.abs(np.array(velocities)) >= C.c_kms):
+            return -np.inf
+        payload = (velocities, p_GP)
         for pconn in pconns.values():
-            pconn.send(("LNPROB", p))
+            pconn.send(("LNPROB", payload))
         lnps = np.array([pconn.recv() for pconn in pconns.values()])
         return float(np.sum(lnps)) + lnprior
 

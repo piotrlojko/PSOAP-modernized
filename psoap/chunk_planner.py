@@ -19,6 +19,7 @@ Typical usage::
 """
 
 import logging
+import os
 
 import numpy as np
 
@@ -33,6 +34,7 @@ _DEFAULT_SAFETY_FACTOR = 4.0
 
 # Fraction of available RAM to budget per worker by default.
 _DEFAULT_MEMORY_FRACTION = 0.25
+_DEFAULT_MIN_PIXELS_PER_CHUNK = 256
 
 # Fallback available-memory value used when psutil is not installed.
 _FALLBACK_MEMORY_BYTES = 2 * 1024 ** 3  # 2 GiB
@@ -63,6 +65,8 @@ def plan_chunks(
     max_chunks=None,
     max_matrix_elements=None,
     memory_cap_bytes=None,
+    target_workers=None,
+    min_pixels_per_chunk=_DEFAULT_MIN_PIXELS_PER_CHUNK,
     max_wallclock_hours=48.0,
     n_samples=None,
     time_per_likelihood_s=None,
@@ -155,8 +159,20 @@ def plan_chunks(
     # N = n_epochs × n_pix_per_chunk  →  derive n_pix_max per chunk
     n_pix_max = max(1, N_max // n_epochs)
 
-    # Minimum number of chunks required
+    # Minimum number of chunks required by memory constraints.
     n_chunks_needed = max(1, int(np.ceil(total_pix / n_pix_max)))
+
+    # Planner-level parallelism target: split into at least one chunk per worker
+    # so multi-core runs do not underutilize CPUs when memory allows very large
+    # chunks.
+    if target_workers is None:
+        target_workers = os.cpu_count() or 1
+    target_workers = int(max(1, target_workers))
+    min_pixels_per_chunk = int(max(1, min_pixels_per_chunk))
+    max_parallel_chunks = max(1, total_pix // min_pixels_per_chunk)
+    target_workers = min(target_workers, max_parallel_chunks, total_pix)
+
+    n_chunks_planned = max(n_chunks_needed, target_workers)
 
     logger.info(
         "Chunk planner: total_pix=%d, n_epochs=%d, N_max=%d, "
@@ -202,6 +218,8 @@ def plan_chunks(
                 avail / 1024 ** 3,
             )
         )
+    if max_chunks is not None:
+        n_chunks_planned = min(n_chunks_planned, int(max_chunks))
 
     # Wall-clock guard
     if time_per_likelihood_s is not None and n_samples is not None:
@@ -223,7 +241,7 @@ def plan_chunks(
             )
 
     # --- Build chunk boundaries ---
-    chunk_edges = np.array_split(wl_window, n_chunks_needed)
+    chunk_edges = np.array_split(wl_window, n_chunks_planned)
     chunks = [
         {"wl_min": float(sub[0]), "wl_max": float(sub[-1])}
         for sub in chunk_edges
@@ -243,7 +261,7 @@ def plan_chunks(
         "[chunk_planner] Planning {:d} wavelength chunk(s) across "
         "[{:.2f}, {:.2f}] Å  "
         "(N_max={:d}, n_pix_max={:d}/chunk, n_epochs={:d}, "
-        "budget={:.2f} GiB).".format(
+        "budget={:.2f} GiB, target_workers={:d}).".format(
             len(chunks),
             lo,
             hi,
@@ -251,6 +269,7 @@ def plan_chunks(
             n_pix_max,
             n_epochs,
             budget / 1024 ** 3,
+            target_workers,
         )
     )
 
