@@ -48,23 +48,24 @@ Top-level keys
 ``outdir``
     Output directory root.
 
-Wavelength controls
--------------------
+Preprocessing and chunking controls
+-----------------------------------
 
-For single-chunk runs (``psoap-sample``), optional keys:
+PSOAP now applies the same preprocessing sequence in both ``psoap-sample`` and
+``psoap-sample-parallel``:
+
+1. optional barycentric correction (when ``barycentric_corrected: false``),
+2. optional wavelength-window cut (``wl_min`` / ``wl_max``),
+3. optional resolution degradation (``resolution_degrade``),
+4. automatic chunk planning (always enabled).
+
+Optional wavelength-window keys:
 
 * ``wl_min``
 * ``wl_max``
 
-For multi-chunk runs (``psoap-sample-parallel``), use ``wl_ranges``:
-
-::
-
-    wl_ranges:
-      - {wl_min: 5260.0, wl_max: 5280.0}
-      - {wl_min: 5280.0, wl_max: 5300.0}
-
-If ``wl_ranges`` is omitted, one default chunk is used.
+Automatic chunk planning is always used and is configured via ``auto_chunk``.
+If ``auto_chunk`` is omitted, planner defaults are used.
 
 Model parameter sets
 --------------------
