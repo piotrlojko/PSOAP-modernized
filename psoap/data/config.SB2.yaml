@@ -1,35 +1,36 @@
-# PSOAP configuration file for a double-lined spectroscopic binary (SB2).
-# Copy this to your working directory as config.yaml and edit accordingly.
+### PSOAP configuration file for a double-lined spectroscopic binary (SB2).
+### Copy this to your working directory as config.yaml and edit accordingly.
 
-# Text file with two columns: "filename" and "date"
-# filename: path to a 3-column text file (wl[AA], flux, sigma)
-# date: observation date (BJD_TDB)
+### Text file with two columns and a pair of single-line header keys: "filename" and "date"
+### filename --> path to a 3-column text file 
+### (each spectrum file should contain "wavelength_Angstrom", "flux", and "flux_err" keys)
+### date --> observation date (BJD_TDB)
 spectra_list: spectra_list.txt
 
-# SB2 model (double-lined)
+### SB2 model (double-lined)
 model: SB2
 
-# Optionally restrict analysis to a wavelength window [Angstroms]
+### Optionally restrict analysis to a wavelength window [Angstroms]
 # wl_min: 5260.0
 # wl_max: 5280.0
 
-# Maximum number of epochs to load (null = load all)
+### Maximum number of epochs to load (null = load all)
 epoch_limit: ~
 
-# Noise softening factor applied to sigma before GP fitting
+### Noise softening factor applied to sigma before GP fitting
 soften: 1.0
 
-# Barycentric velocity correction (Earth's motion relative to Solar System
-# barycenter).  Set to true if the input spectra are already corrected for
-# this effect; set to false to have PSOAP compute and apply the correction
-# automatically as a preprocessing step.
-# When barycentric_corrected is false, target_ra and target_dec (ICRS,
-# decimal degrees) are required.
+### Barycentric velocity correction (Earth's motion relative to Solar System
+### barycenter).  Set to true if the input spectra are already corrected for
+### this effect; set to false to have PSOAP compute and apply the correction
+### automatically as a preprocessing step.
+### When barycentric_corrected is false, target_ra and target_dec (ICRS,
+### decimal degrees) are required.
 barycentric_corrected: true
 # target_ra: 26.021   # Right Ascension [degrees], e.g. Tau Ceti
 # target_dec: -15.939  # Declination [degrees]
 
-# Orbital and GP starting parameters
+### Orbital and GP starting parameters
 parameters:
   q: 0.2          # mass ratio q = M_B / M_A
   K: 1.0          # semi-amplitude of primary [km/s]
@@ -43,7 +44,7 @@ parameters:
   amp_g: 0.5      # GP amplitude of secondary [flux]
   l_g: 5.0        # GP length scale of secondary [km/s]
 
-# Step sizes for the MH proposal
+### Step sizes for the MH proposal
 jumps:
   q: 0.01
   K: 0.2
@@ -57,45 +58,43 @@ jumps:
   amp_g: 0.05
   l_g: 0.5
 
-# Parameters held fixed during sampling
+### Parameters held fixed during sampling
 fix_params: ["gamma"]
 
-# Number of MCMC steps
+### Number of MCMC steps
 samples: 1000
 
-# Random seed for reproducibility (null = unseeded)
+### Random seed for reproducibility (null = unseeded)
 seed: ~
 
-# Path to optimised jump covariance matrix (optional)
+### Path to optimised jump covariance matrix (optional)
 opt_jump: opt_jump.npy
 
-# Output directory
+### Output directory
 outdir: output
 
-# ---------------------------------------------------------------------------
-# Automatic wavelength chunking (optional).
-# When enabled, PSOAP inspects the loaded spectra and available system memory
-# to automatically split the wavelength range into sub-chunks such that each
-# worker's dense N×N covariance matrix fits in RAM.  Leave disabled (or omit
-# this section entirely) to use the existing wl_ranges list instead.
-# ---------------------------------------------------------------------------
+
+### Automatic wavelength chunking (optional).
+### When enabled, PSOAP inspects the loaded spectra and available system memory
+### to automatically split the wavelength range into sub-chunks such that each
+### worker's dense NxN covariance matrix fits in RAM.  Leave disabled (or omit
+### this section entirely) to use the existing wl_ranges list instead.
 # auto_chunk:
 #   enabled: false        # set to true to activate automatic chunking
 #   memory_fraction: 0.25 # fraction of available RAM to budget per worker
-#   safety_factor: 4.0    # multiplier on raw N² memory estimate (headroom)
+#   safety_factor: 4.0    # multiplier on raw N^2 memory estimate (headroom)
 #   max_chunks: ~         # hard cap on number of chunks (null = no cap)
 #   max_wallclock_hours: 48.0  # abort if estimated runtime exceeds this
 
-# ---------------------------------------------------------------------------
-# Spectral resolution degradation (optional preprocessing).
-# When enabled, each loaded chunk is linearly interpolated onto a sparser
-# wavelength grid before GP fitting.  This reduces N and therefore both the
-# memory footprint and the compute cost.  Use this when auto-chunking alone
-# cannot reduce chunk sizes to a manageable level.
-# Provide exactly one of target_step or factor.
-# ---------------------------------------------------------------------------
+
+### Spectral resolution degradation (optional preprocessing).
+### When enabled, each loaded chunk is linearly interpolated onto a sparser
+### wavelength grid before GP fitting.  This reduces N and therefore both the
+### memory footprint and the compute cost.  Use this when auto-chunking alone
+### cannot reduce chunk sizes to a manageable level.
+### Provide exactly one of target_step or factor.
 # resolution_degrade:
 #   enabled: false           # set to true to activate degradation
 #   target_step: ~           # target uniform wavelength spacing [Angstroms]
-#   factor: ~                # integer down-sampling factor (keep every k-th point)
+#   factor: ~                # integer down-sampling factor (interpolate flux onto k-times sparser wl grid)
 #   apply_before_chunking: true  # degrade before auto-chunk planning
