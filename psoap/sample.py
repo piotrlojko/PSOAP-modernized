@@ -9,7 +9,6 @@ import argparse
 import yaml
 import os
 import shutil
-import gc
 import logging
 from functools import partial
 
@@ -138,7 +137,6 @@ def main():
         for lwl, fl, sigma, mask, V11 in zip(lwls, fls, sigmas, masks, V11s):
             shifted = replicate_wls(lwl, velocities, mask)
             lnp += covariance.lnlike[model](V11, *shifted, fl, sigma, *p_GP)
-        gc.collect()
         return lnp + lnprior
 
     # ----- sampler -----

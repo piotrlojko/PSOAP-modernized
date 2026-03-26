@@ -81,6 +81,8 @@ outdir: output
 # auto_chunk:
 #   memory_fraction: 0.25 # fraction of available RAM to budget per worker
 #   safety_factor: 4.0    # multiplier on raw N^2 memory estimate (headroom)
+#   target_workers: ~     # desired chunk parallelism (null = CPU count)
+#   min_pixels_per_chunk: 256  # avoid oversplitting into tiny chunks
 #   max_chunks: ~         # hard cap on number of chunks (null = no cap)
 #   max_wallclock_hours: 48.0  # abort if estimated runtime exceeds this
 
