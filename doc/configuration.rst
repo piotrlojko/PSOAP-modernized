@@ -71,7 +71,8 @@ Supported ``auto_chunk`` keys:
 
 * ``memory_fraction``: fraction of available RAM to budget per worker.
 * ``safety_factor``: headroom multiplier on the dense ``N²`` matrix estimate.
-* ``target_workers``: desired number of chunks to plan (defaults to CPU count).
+* ``target_workers``: target number of parallel chunks to enable CPU utilization
+  (defaults to CPU count).
 * ``min_pixels_per_chunk``: lower bound on chunk size when splitting for worker parallelism.
 * ``max_chunks``: hard cap on the number of chunks.
 * ``max_wallclock_hours``: optional runtime guard for planner estimates.

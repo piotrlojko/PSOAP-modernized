@@ -169,10 +169,13 @@ def plan_chunks(
         target_workers = os.cpu_count() or 1
     target_workers = int(max(1, target_workers))
     min_pixels_per_chunk = int(max(1, min_pixels_per_chunk))
-    max_parallel_chunks = max(1, total_pix // min_pixels_per_chunk)
-    target_workers = min(target_workers, max_parallel_chunks, total_pix)
+    target_workers = min(
+        target_workers,
+        max(1, total_pix // min_pixels_per_chunk),
+        total_pix,
+    )
 
-    n_chunks_planned = max(n_chunks_needed, target_workers)
+    n_chunks_final = max(n_chunks_needed, target_workers)
 
     logger.info(
         "Chunk planner: total_pix=%d, n_epochs=%d, N_max=%d, "
@@ -219,7 +222,7 @@ def plan_chunks(
             )
         )
     if max_chunks is not None:
-        n_chunks_planned = min(n_chunks_planned, int(max_chunks))
+        n_chunks_final = min(n_chunks_final, int(max_chunks))
 
     # Wall-clock guard
     if time_per_likelihood_s is not None and n_samples is not None:
@@ -241,7 +244,7 @@ def plan_chunks(
             )
 
     # --- Build chunk boundaries ---
-    chunk_edges = np.array_split(wl_window, n_chunks_planned)
+    chunk_edges = np.array_split(wl_window, n_chunks_final)
     chunks = [
         {"wl_min": float(sub[0]), "wl_max": float(sub[-1])}
         for sub in chunk_edges
