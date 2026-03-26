@@ -1,21 +1,21 @@
-# PSOAP configuration file for a double-lined tertiary system (ST2).
-# ST2: inner SB2 pair (A+B both visible in the spectrum) + invisible outer
-#      companion (C) that dynamically perturbs the inner pair's orbit.
-# The GP model has the same two-component structure as SB2.
+### PSOAP configuration file for a double-lined tertiary system (ST2).
+### ST2: inner SB2 pair (A+B both visible in the spectrum) + invisible outer
+###      companion (C) that dynamically perturbs the inner pair's orbit.
+### The GP model has the same two-component structure as SB2.
 
 spectra_list: spectra_list.txt
 
-# ST2: double-lined tertiary (hook — outer companion C not spectroscopically
-#      visible; only A and B contribute lines to the spectrum).
+### ST2: double-lined tertiary (hook — outer companion C not spectroscopically
+###      visible; only A and B contribute lines to the spectrum).
 model: ST2
 
 epoch_limit: ~
 soften: 1.0
 
-# Barycentric velocity correction.  Set to true if spectra are already
-# corrected; set to false to apply the correction automatically.
-# When barycentric_corrected is false, target_ra and target_dec (ICRS,
-# decimal degrees) are required.
+### Barycentric velocity correction.  Set to true if spectra are already
+### corrected; set to false to apply the correction automatically.
+### When barycentric_corrected is false, target_ra and target_dec (ICRS,
+### decimal degrees) are required.
 barycentric_corrected: true
 # target_ra: 83.822
 # target_dec: -5.391
@@ -62,30 +62,27 @@ seed: ~
 opt_jump: opt_jump.npy
 outdir: output
 
-# ---------------------------------------------------------------------------
-# Automatic wavelength chunking (optional).
-# When enabled, PSOAP inspects the loaded spectra and available system memory
-# to automatically split the wavelength range into sub-chunks such that each
-# worker's dense N×N covariance matrix fits in RAM.  Leave disabled (or omit
-# this section entirely) to use the existing wl_ranges list instead.
-# ---------------------------------------------------------------------------
+### Automatic wavelength chunking (optional).
+### When enabled, PSOAP inspects the loaded spectra and available system memory
+### to automatically split the wavelength range into sub-chunks such that each
+### worker's dense NxN covariance matrix fits in RAM.  Leave disabled (or omit
+### this section entirely) to use the existing wl_ranges list instead.
 # auto_chunk:
 #   enabled: false        # set to true to activate automatic chunking
 #   memory_fraction: 0.25 # fraction of available RAM to budget per worker
-#   safety_factor: 4.0    # multiplier on raw N² memory estimate (headroom)
+#   safety_factor: 4.0    # multiplier on raw N^2 memory estimate (headroom)
 #   max_chunks: ~         # hard cap on number of chunks (null = no cap)
 #   max_wallclock_hours: 48.0  # abort if estimated runtime exceeds this
 
-# ---------------------------------------------------------------------------
-# Spectral resolution degradation (optional preprocessing).
-# When enabled, each loaded chunk is linearly interpolated onto a sparser
-# wavelength grid before GP fitting.  This reduces N and therefore both the
-# memory footprint and the compute cost.  Use this when auto-chunking alone
-# cannot reduce chunk sizes to a manageable level.
-# Provide exactly one of target_step or factor.
-# ---------------------------------------------------------------------------
+
+### Spectral resolution degradation (optional preprocessing).
+### When enabled, each loaded chunk is linearly interpolated onto a sparser
+### wavelength grid before GP fitting.  This reduces N and therefore both the
+### memory footprint and the compute cost.  Use this when auto-chunking alone
+### cannot reduce chunk sizes to a manageable level.
+### Provide exactly one of target_step or factor.
 # resolution_degrade:
 #   enabled: false           # set to true to activate degradation
 #   target_step: ~           # target uniform wavelength spacing [Angstroms]
-#   factor: ~                # integer down-sampling factor (keep every k-th point)
+#   factor: ~                # integer down-sampling factor (interpolate flux onto k-times sparser wl grid)
 #   apply_before_chunking: true  # degrade before auto-chunk planning
