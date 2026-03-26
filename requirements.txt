@@ -8,3 +8,5 @@ matplotlib==2.0.0
 pytest==3.0.0
 george==0.3.0
 pybind11==2.0.0
+PyYAML==3.12
+celerite==0.3.0
