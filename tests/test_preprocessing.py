@@ -11,10 +11,10 @@ def _make_chunk(n_epochs=2, n_pix=200, wl_start=5000.0, wl_step=0.1):
     wl_1d = wl_start + np.arange(n_pix) * wl_step
     wl = np.tile(wl_1d, (n_epochs, 1))
     fl = np.ones((n_epochs, n_pix), dtype=np.float64)
-    sigma = np.full((n_epochs, n_pix), 0.01, dtype=np.float64)
+    sigma_arr = np.full((n_epochs, n_pix), 0.01, dtype=np.float64)
     dates = np.arange(n_epochs, dtype=np.float64) + 2451545.0
     date_arr = dates[:, np.newaxis] * np.ones((n_epochs, n_pix))
-    return Chunk(wl, fl, sigma, date_arr)
+    return Chunk(wl, fl, sigma_arr, date_arr)
 
 
 def test_pipeline_order_barycentric_then_crop_then_degrade_then_chunk(monkeypatch):
@@ -81,15 +81,16 @@ def test_pipeline_order_barycentric_then_crop_then_degrade_then_chunk(monkeypatc
     }
     chunks = preprocessing.build_preprocessed_chunks(cfg)
     assert len(chunks) == 2
-    assert call_order[:6] == [
+    assert call_order == [
         "load_full",
         "compute_bary",
         "apply_bary",
         "crop_window",
         "degrade",
         "plan_chunks",
+        "crop_chunk",
+        "crop_chunk",
     ]
-    assert call_order.count("crop_chunk") == 2
 
 
 def test_pipeline_autochunks_even_when_wavelength_window_is_set(monkeypatch):

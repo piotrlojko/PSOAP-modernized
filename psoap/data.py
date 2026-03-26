@@ -224,12 +224,23 @@ class Chunk:
             f_sig = interp1d(
                 self.wl[i], self.sigma[i], bounds_error=False, fill_value=np.inf
             )
+            f_mask = interp1d(
+                self.wl[i],
+                self.mask[i].astype(np.float64),
+                bounds_error=False,
+                fill_value=0.0,
+            )
             wl_arr[i] = wl_target
             fl_arr[i] = f_fl(wl_target)
             sigma_arr[i] = f_sig(wl_target)
+            # Preserve pre-existing mask intent across re-gridding while also
+            # masking out extrapolated pixels (sigma=inf).
+            preserved_mask = f_mask(wl_target) > 0.5
+            if i == 0:
+                mask_new = np.empty((n_epochs, n_pix), dtype=bool)
+            mask_new[i] = np.isfinite(sigma_arr[i]) & preserved_mask
 
         date_arr = self.date1D[:, np.newaxis] * np.ones((n_epochs, n_pix))
-        mask_new = np.isfinite(sigma_arr)
         return Chunk(wl_arr, fl_arr, sigma_arr, date_arr, mask=mask_new)
 
     @classmethod

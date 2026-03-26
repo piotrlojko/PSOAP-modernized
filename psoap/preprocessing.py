@@ -67,6 +67,15 @@ def build_preprocessed_chunks(config):
             factor=degrade_cfg.get("factor"),
         )
 
+    # Validate epoch alignment and monotonic wavelength grids prior to planning.
+    if data.n_epochs <= 0:
+        raise RuntimeError("No epochs available after preprocessing.")
+    if not np.allclose(data.date1D, data.date[:, 0]):
+        raise RuntimeError("Inconsistent epoch-date bookkeeping in preprocessed data.")
+    for i in range(data.n_epochs):
+        if not np.all(np.diff(data.wl[i]) > 0):
+            raise RuntimeError("Wavelength grid must be strictly increasing per epoch.")
+
     # 4) Mandatory auto-chunking
     auto_chunk_cfg = _auto_chunk_config(config)
     wl_ranges = plan_chunks(
