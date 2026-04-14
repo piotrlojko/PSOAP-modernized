@@ -10,7 +10,22 @@ import numpy as np
 from astropy.io import fits
 
 
-def _flatten_epoch(wl2d, fl2d, sigma2d):
+def _read_meta_vector(hdf5, key, n_epochs):
+    if key not in hdf5:
+        return np.full((n_epochs,), np.nan)
+
+    values = np.asarray(hdf5[key][:]).reshape(-1)
+    if len(values) != n_epochs:
+        raise ValueError(
+            "Dataset '{}' must have length {}, got {}.".format(
+                key, n_epochs, len(values)
+            )
+        )
+    return values
+
+
+def _flatten_and_sort_epoch(wl2d, fl2d, sigma2d):
+    """Flatten one (n_orders, n_pix) epoch into wavelength-sorted 1D arrays."""
     n_orders, n_pix = wl2d.shape
     order_index = np.repeat(np.arange(n_orders, dtype=np.int32), n_pix)
     pix_index = np.tile(np.arange(n_pix, dtype=np.int32), n_orders)
@@ -37,6 +52,7 @@ def _flatten_epoch(wl2d, fl2d, sigma2d):
 
 
 def _build_hdus(wl1d, fl1d, sigma1d, order_index, pix_index, header):
+    """Build the output HDU list with primary metadata and a SPECTRUM table."""
     primary_hdu = fits.PrimaryHDU(header=header)
     table_hdu = fits.BinTableHDU.from_columns(
         [
@@ -52,6 +68,7 @@ def _build_hdus(wl1d, fl1d, sigma1d, order_index, pix_index, header):
 
 
 def convert_hdf5_to_fits(input_hdf5, output_dir, prefix=None, overwrite=False):
+    """Convert a PSOAP HDF5 cube into one 1D FITS spectrum file per epoch."""
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
 
@@ -59,8 +76,17 @@ def convert_hdf5_to_fits(input_hdf5, output_dir, prefix=None, overwrite=False):
         wl = hdf5["wl"][:]
         fl = hdf5["fl"][:]
         sigma = hdf5["sigma"][:]
-        jd = hdf5["JD"][:] if "JD" in hdf5 else np.full((wl.shape[0],), np.nan)
-        bcv = hdf5["BCV"][:] if "BCV" in hdf5 else np.full((wl.shape[0],), np.nan)
+
+        if wl.ndim != 3:
+            raise ValueError(
+                "Dataset 'wl' must have shape (n_epochs, n_orders, n_pix)."
+            )
+        if fl.shape != wl.shape or sigma.shape != wl.shape:
+            raise ValueError("Datasets 'fl' and 'sigma' must match shape of 'wl'.")
+
+        n_epochs = wl.shape[0]
+        jd = _read_meta_vector(hdf5, "JD", n_epochs)
+        bcv = _read_meta_vector(hdf5, "BCV", n_epochs)
 
     n_epochs, n_orders, n_pix = wl.shape
 
@@ -68,7 +94,7 @@ def convert_hdf5_to_fits(input_hdf5, output_dir, prefix=None, overwrite=False):
         prefix = os.path.splitext(os.path.basename(input_hdf5))[0]
 
     for epoch in range(n_epochs):
-        wl1d, fl1d, sigma1d, order_index, pix_index = _flatten_epoch(
+        wl1d, fl1d, sigma1d, order_index, pix_index = _flatten_and_sort_epoch(
             wl[epoch], fl[epoch], sigma[epoch]
         )
 
