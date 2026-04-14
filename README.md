@@ -1,6 +1,8 @@
-> [!IMPORTANT]
-> # This repo is a vibe-coded fork of the original `PSOAP` code, and remains a work in progress. So do not expect it to work properly.
-> The goal is to modernize the original repository and completely abandon the `HDF5` data format.
+> [!CAUTION]
+> ## This repo is a vibe-coded fork of the original `PSOAP` code, and does not work yet 😒
+> The goal is to modernize the original repository and completely abandon the `HDF5` data format for the input specra files.
+>
+> All credit belongs to **Ian Czekala** and **Collaborators**.
 
 # PSOAP-modernized
 Pronounced "soap."
