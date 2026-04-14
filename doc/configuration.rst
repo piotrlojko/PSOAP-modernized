@@ -29,6 +29,12 @@ The HDF5 file has the following top-level entries as datasets:
 
 If you write scripts for converting spectra from your telescope, please consider adding them to this package via a pull request (into a ``scripts/your-telescope-name/`` directory) so that they may be useful for other users with similar data. For example, there are already some scripts for converting data taken with the *TRES* spectrograph into the HDF5 format `here <https://github.com/iancze/PSOAP/tree/master/scripts/TRES>`_. 
 
+To convert a PSOAP-format HDF5 dataset into per-epoch 1D FITS spectra (for easier metadata transport with fields like ``JD`` and ``BCV``), use ::
+
+    $ python scripts/psoap_hdf5_to_fits.py LP661-13.hdf5 fits_out/
+
+This writes one FITS file per epoch with a ``SPECTRUM`` table extension containing ``WAVELENGTH``, ``FLUX``, ``SIGMA``, ``ORDER``, and ``PIXEL`` columns, and stores ``JD``/``BCV`` in the primary header.
+
 
 Chunking the dataset
 --------------------
